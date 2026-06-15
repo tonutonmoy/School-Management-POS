@@ -1,0 +1,769 @@
+package pages
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/google/uuid"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+type ExamFormData struct {
+	Sessions       []dto.AcademicSessionResponse
+	Classes        []dto.ClassResponse
+	Sections       []dto.SectionResponse
+	Subjects       []dto.SubjectResponse
+	GradingSystems []dto.GradingSystemResponse
+	Exams          []dto.ExamResponse
+}
+
+templ ExamList(data *dto.PaginatedExams, filter dto.ExamSearchFilter, formData *ExamFormData, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Exams", csrf, user, examListContent(data, filter, formData, flash, flashType, csrf))
+}
+
+templ examListContent(data *dto.PaginatedExams, filter dto.ExamSearchFilter, formData *ExamFormData, flash, flashType, csrf string) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Examinations</h1>
+			<div class="flex gap-2">
+				<a href="/exams/dashboard" class="rounded-lg border px-4 py-2 text-sm">Dashboard</a>
+				<a href="/grading-systems" class="rounded-lg border px-4 py-2 text-sm">Grading</a>
+				<a href="/exams/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create Exam</a>
+			</div>
+		</div>
+		if flash != "" {
+			<div class={ flashClass(flashType) + " mt-4 rounded-lg px-4 py-2 text-sm" }>{ flash }</div>
+		}
+		<form method="GET" action="/exams" class="mt-4 flex flex-wrap gap-2">
+			<input name="q" value={ filter.Query } placeholder="Search..." class="rounded-lg border px-3 py-2 text-sm"/>
+			<select name="status" class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">All Status</option>
+				<option value="draft" selected?={ filter.Status == "draft" }>Draft</option>
+				<option value="published" selected?={ filter.Status == "published" }>Published</option>
+				<option value="archived" selected?={ filter.Status == "archived" }>Archived</option>
+			</select>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Filter</button>
+		</form>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Name</th>
+					<th class="px-4 py-3 text-left">Type</th>
+					<th class="px-4 py-3 text-left">Session / Class</th>
+					<th class="px-4 py-3 text-left">Dates</th>
+					<th class="px-4 py-3 text-left">Status</th>
+					<th class="px-4 py-3 text-right">Actions</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					if data != nil {
+						for _, e := range data.Items {
+							<tr>
+								<td class="px-4 py-3 font-medium">{ e.Name }</td>
+								<td class="px-4 py-3">{ examTypeLabel(e.ExamType) }</td>
+								<td class="px-4 py-3">{ e.SessionName } / { e.ClassName }</td>
+								<td class="px-4 py-3">{ e.StartDate.Format("2006-01-02") } — { e.EndDate.Format("2006-01-02") }</td>
+								<td class="px-4 py-3"><span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{ e.Status }</span></td>
+								<td class="px-4 py-3 text-right">
+									<a href={ templ.SafeURL("/exams/" + e.ID.String()) } class="text-indigo-600">View</a>
+								</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ ExamForm(title string, exam *dto.ExamResponse, formData *ExamFormData, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, examFormContent(title, exam, formData, flash, flashType, csrf))
+}
+
+templ examFormContent(title string, exam *dto.ExamResponse, formData *ExamFormData, flash, flashType, csrf string) {
+	<div class="max-w-2xl">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		if flash != "" {
+			<div class={ flashClass(flashType) + " mt-4 rounded-lg px-4 py-2 text-sm" }>{ flash }</div>
+		}
+		<form method="POST" action={ examFormAction(exam) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input name="name" required value={ examFieldName(exam) } placeholder="Exam name" class="w-full rounded-lg border px-3 py-2"/>
+			<select name="exam_type" required class="w-full rounded-lg border px-3 py-2">
+				@examTypeOption("first_terminal", "First Terminal", exam)
+				@examTypeOption("mid_term", "Mid Term", exam)
+				@examTypeOption("half_yearly", "Half Yearly", exam)
+				@examTypeOption("annual", "Annual", exam)
+				@examTypeOption("test_exam", "Test Exam", exam)
+				@examTypeOption("model_test", "Model Test", exam)
+			</select>
+			<select name="session_id" required class="w-full rounded-lg border px-3 py-2">
+				<option value="">Select Session</option>
+				if formData != nil {
+					for _, s := range formData.Sessions {
+						<option value={ s.ID.String() } selected?={ examSessionSelected(exam, s.ID) }>{ s.Name }</option>
+					}
+				}
+			</select>
+			<select name="class_id" required class="w-full rounded-lg border px-3 py-2">
+				<option value="">Select Class</option>
+				if formData != nil {
+					for _, cl := range formData.Classes {
+						<option value={ cl.ID.String() } selected?={ examClassSelected(exam, cl.ID) }>{ cl.Name }</option>
+					}
+				}
+			</select>
+			<div class="grid grid-cols-2 gap-4">
+				<input type="date" name="start_date" required value={ examStartDate(exam) } class="rounded-lg border px-3 py-2"/>
+				<input type="date" name="end_date" required value={ examEndDate(exam) } class="rounded-lg border px-3 py-2"/>
+			</div>
+			<div class="grid grid-cols-2 gap-4">
+				<input name="total_marks" type="number" step="0.01" required value={ examTotalMarks(exam) } placeholder="Total marks" class="rounded-lg border px-3 py-2"/>
+				<input name="passing_marks" type="number" step="0.01" required value={ examPassMarks(exam) } placeholder="Passing marks" class="rounded-lg border px-3 py-2"/>
+			</div>
+			<select name="grading_system_id" class="w-full rounded-lg border px-3 py-2">
+				<option value="">Default Grading System</option>
+				if formData != nil {
+					for _, g := range formData.GradingSystems {
+						<option value={ g.ID.String() } selected?={ examGradingSelected(exam, g.ID) }>{ g.Name }</option>
+					}
+				}
+			</select>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+templ examTypeOption(value, label string, exam *dto.ExamResponse) {
+	<option value={ value } selected?={ exam != nil && exam.ExamType == value }>{ label }</option>
+}
+
+templ ExamDetail(exam *dto.ExamResponse, subjects []dto.ExamSubjectResponse, formData *ExamFormData, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Exam Detail", csrf, user, examDetailContent(exam, subjects, formData, flash, flashType, csrf))
+}
+
+templ examDetailContent(exam *dto.ExamResponse, subjects []dto.ExamSubjectResponse, formData *ExamFormData, flash, flashType, csrf string) {
+	<div>
+		if flash != "" {
+			<div class={ flashClass(flashType) + " mb-4 rounded-lg px-4 py-2 text-sm" }>{ flash }</div>
+		}
+		<div class="flex items-start justify-between">
+			<div>
+				<h1 class="text-2xl font-bold">{ exam.Name }</h1>
+				<p class="text-slate-500">{ examTypeLabel(exam.ExamType) } — { exam.SessionName } / { exam.ClassName }</p>
+				<p class="mt-1 text-sm">Status: <span class="font-medium">{ exam.Status }</span> | Results: <span class="font-medium">{ exam.ResultStatus }</span></p>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				<a href={ templ.SafeURL("/exams/" + exam.ID.String() + "/edit") } class="rounded-lg border px-3 py-1.5 text-sm">Edit</a>
+				<a href={ templ.SafeURL("/exams/" + exam.ID.String() + "/marks") } class="rounded-lg border px-3 py-1.5 text-sm">Marks Entry</a>
+				<a href={ templ.SafeURL("/exams/" + exam.ID.String() + "/results") } class="rounded-lg border px-3 py-1.5 text-sm">Results</a>
+				<a href={ templ.SafeURL("/exams/" + exam.ID.String() + "/tabulation") } class="rounded-lg border px-3 py-1.5 text-sm">Tabulation</a>
+				<a href={ templ.SafeURL("/exams/" + exam.ID.String() + "/merit-list") } class="rounded-lg border px-3 py-1.5 text-sm">Merit List</a>
+			</div>
+		</div>
+		<div class="mt-4 flex flex-wrap gap-2">
+			<form method="POST" action={ templ.SafeURL("/exams/" + exam.ID.String() + "/publish") }>
+				@components.CSRFInput(csrf)
+				<button type="submit" class="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm text-white">Publish Exam</button>
+			</form>
+			<form method="POST" action={ templ.SafeURL("/exams/" + exam.ID.String() + "/process") }>
+				@components.CSRFInput(csrf)
+				<button type="submit" class="rounded-lg bg-indigo-600 px-3 py-1.5 text-sm text-white">Process Results</button>
+			</form>
+			<form method="POST" action={ templ.SafeURL("/exams/" + exam.ID.String() + "/publish-results") }>
+				@components.CSRFInput(csrf)
+				<button type="submit" class="rounded-lg bg-violet-600 px-3 py-1.5 text-sm text-white">Publish Results</button>
+			</form>
+			<form method="POST" action={ templ.SafeURL("/exams/" + exam.ID.String() + "/archive") }>
+				@components.CSRFInput(csrf)
+				<button type="submit" class="rounded-lg border px-3 py-1.5 text-sm">Archive</button>
+			</form>
+		</div>
+		<div class="mt-8 grid gap-6 lg:grid-cols-2">
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Subject Configuration</h2>
+				<div class="mt-4 overflow-x-auto">
+					<table class="min-w-full text-sm">
+						<thead><tr class="border-b">
+							<th class="py-2 text-left">Subject</th>
+							<th class="py-2 text-right">Full</th>
+							<th class="py-2 text-right">Pass</th>
+							<th class="py-2 text-right">W/M/P</th>
+						</tr></thead>
+						<tbody>
+							for _, s := range subjects {
+								<tr class="border-b">
+									<td class="py-2">{ s.SubjectName }</td>
+									<td class="py-2 text-right">{ fmt.Sprintf("%.0f", s.FullMarks) }</td>
+									<td class="py-2 text-right">{ fmt.Sprintf("%.0f", s.PassMarks) }</td>
+									<td class="py-2 text-right">{ fmt.Sprintf("%.0f/%.0f/%.0f", s.WrittenMarks, s.MCQMarks, s.PracticalMarks) }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Add Subject</h2>
+				<form method="POST" action={ templ.SafeURL("/exams/" + exam.ID.String() + "/subjects") } class="mt-4 space-y-3">
+					@components.CSRFInput(csrf)
+					<select name="subject_id" required class="w-full rounded-lg border px-3 py-2 text-sm">
+						<option value="">Select Subject</option>
+						if formData != nil {
+							for _, subj := range formData.Subjects {
+								<option value={ subj.ID.String() }>{ subj.Name }</option>
+							}
+						}
+					</select>
+					<div class="grid grid-cols-2 gap-2">
+						<input name="full_marks" type="number" step="0.01" required placeholder="Full marks" class="rounded-lg border px-3 py-2 text-sm"/>
+						<input name="pass_marks" type="number" step="0.01" required placeholder="Pass marks" class="rounded-lg border px-3 py-2 text-sm"/>
+						<input name="written_marks" type="number" step="0.01" placeholder="Written" class="rounded-lg border px-3 py-2 text-sm"/>
+						<input name="mcq_marks" type="number" step="0.01" placeholder="MCQ" class="rounded-lg border px-3 py-2 text-sm"/>
+						<input name="practical_marks" type="number" step="0.01" placeholder="Practical" class="rounded-lg border px-3 py-2 text-sm"/>
+					</div>
+					<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Add Subject</button>
+				</form>
+			</div>
+		</div>
+	</div>
+}
+
+templ MarksEntry(exam *dto.ExamResponse, subjects []dto.ExamSubjectResponse, active *dto.ExamSubjectResponse, rows []dto.MarkEntryRow, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Marks Entry", csrf, user, marksEntryContent(exam, subjects, active, rows, flash, flashType, csrf))
+}
+
+templ marksEntryContent(exam *dto.ExamResponse, subjects []dto.ExamSubjectResponse, active *dto.ExamSubjectResponse, rows []dto.MarkEntryRow, flash, flashType, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Marks Entry — { exam.Name }</h1>
+		if flash != "" {
+			<div class={ flashClass(flashType) + " mt-4 rounded-lg px-4 py-2 text-sm" }>{ flash }</div>
+		}
+		<div class="mt-4 flex flex-wrap gap-2">
+			for _, s := range subjects {
+				<a href={ templ.SafeURL("/exams/" + exam.ID.String() + "/marks/" + s.ID.String()) }
+					class={ marksSubjectLinkClass(active, s.ID) }>{ s.SubjectName }</a>
+			}
+		</div>
+		if active != nil {
+			<form method="POST" action={ templ.SafeURL("/exams/" + exam.ID.String() + "/marks/" + active.ID.String()) } class="mt-6">
+				@components.CSRFInput(csrf)
+				<div class="overflow-x-auto rounded-xl border bg-white">
+					<table class="min-w-full text-sm">
+						<thead class="bg-slate-50"><tr>
+							<th class="px-3 py-2 text-left">Roll</th>
+							<th class="px-3 py-2 text-left">Student</th>
+							<th class="px-3 py-2 text-right">Written</th>
+							<th class="px-3 py-2 text-right">MCQ</th>
+							<th class="px-3 py-2 text-right">Practical</th>
+							<th class="px-3 py-2 text-center">Absent</th>
+						</tr></thead>
+						<tbody class="divide-y">
+							for _, r := range rows {
+								<tr>
+									<td class="px-3 py-2">{ r.RollNumber }</td>
+									<td class="px-3 py-2">{ r.StudentName }</td>
+									<td class="px-3 py-2"><input name={ "written_" + r.StudentID.String() } type="number" step="0.01" value={ fmt.Sprintf("%.2f", r.WrittenScore) } class="w-20 rounded border px-2 py-1 text-right"/></td>
+									<td class="px-3 py-2"><input name={ "mcq_" + r.StudentID.String() } type="number" step="0.01" value={ fmt.Sprintf("%.2f", r.MCQScore) } class="w-20 rounded border px-2 py-1 text-right"/></td>
+									<td class="px-3 py-2"><input name={ "practical_" + r.StudentID.String() } type="number" step="0.01" value={ fmt.Sprintf("%.2f", r.PracticalScore) } class="w-20 rounded border px-2 py-1 text-right"/></td>
+									<td class="px-3 py-2 text-center"><input type="checkbox" name={ "absent_" + r.StudentID.String() } checked?={ r.IsAbsent }/></td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				<button type="submit" class="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-white">Save Marks</button>
+			</form>
+		} else {
+			<p class="mt-6 text-slate-500">Select a subject to enter marks.</p>
+		}
+	</div>
+}
+
+templ ExamDashboard(stats *dto.ExamDashboardStats, examStats *dto.ExamDashboardStats, exams *dto.PaginatedExams, formData *ExamFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Examinations Dashboard", csrf, user, examDashboardContent(stats, examStats, exams, formData, csrf))
+}
+
+templ examDashboardContent(stats *dto.ExamDashboardStats, examStats *dto.ExamDashboardStats, exams *dto.PaginatedExams, formData *ExamFormData, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Examinations Dashboard</h1>
+		<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			@statCard("Active Exams", examDashboardCount(stats, "active"))
+			@statCard("Published Results", examDashboardCount(stats, "published"))
+			@statCard("Students Passed", examDashboardCount(stats, "passed"))
+			@statCard("Students Failed", examDashboardCount(stats, "failed"))
+		</div>
+		<form method="GET" action="/exams/dashboard" class="mt-6 flex gap-2">
+			<select name="exam_id" class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">Select exam for charts</option>
+				if exams != nil {
+					for _, e := range exams.Items {
+						<option value={ e.ID.String() }>{ e.Name }</option>
+					}
+				}
+			</select>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Load</button>
+		</form>
+		if examStats != nil {
+			<div class="mt-6 grid gap-6 lg:grid-cols-2">
+				<div class="rounded-xl border bg-white p-6">
+					<h2 class="font-semibold">GPA Distribution</h2>
+					<ul class="mt-4 space-y-2 text-sm">
+						for _, g := range examStats.GPADistribution {
+							<li class="flex justify-between"><span>{ g.Grade }</span><span>{ g.Count }</span></li>
+						}
+					</ul>
+				</div>
+				<div class="rounded-xl border bg-white p-6">
+					<h2 class="font-semibold">Subject Performance</h2>
+					<ul class="mt-4 space-y-2 text-sm">
+						for _, s := range examStats.SubjectPerformance {
+							<li class="flex justify-between"><span>{ s.SubjectName }</span><span>{ fmt.Sprintf("%.1f%% pass", s.PassRate) }</span></li>
+						}
+					</ul>
+					<p class="mt-4 text-sm text-slate-500">Pass rate: { fmt.Sprintf("%.1f%%", examStats.PassRate) }</p>
+				</div>
+			</div>
+		}
+	</div>
+}
+
+templ statCard(label, value string) {
+	<div class="rounded-xl border bg-white p-5">
+		<p class="text-sm text-slate-500">{ label }</p>
+		<p class="mt-1 text-2xl font-bold">{ value }</p>
+	</div>
+}
+
+templ ExamResults(exam *dto.ExamResponse, data *dto.PaginatedResults, filter dto.ExamReportFilter, formData *ExamFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Exam Results", csrf, user, examResultsContent(exam, data, filter, formData, csrf))
+}
+
+templ examResultsContent(exam *dto.ExamResponse, data *dto.PaginatedResults, filter dto.ExamReportFilter, formData *ExamFormData, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Results — { exam.Name }</h1>
+		<div class="mt-4 flex gap-2">
+			<a href={ templ.SafeURL("/reports/exams/export.csv?exam_id=" + exam.ID.String()) } class="rounded-lg border px-3 py-1.5 text-sm">Export CSV</a>
+		</div>
+		<div class="mt-6 overflow-x-auto rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-3 py-2 text-left">Roll</th>
+					<th class="px-3 py-2 text-left">Student</th>
+					<th class="px-3 py-2 text-right">Total</th>
+					<th class="px-3 py-2 text-right">GPA</th>
+					<th class="px-3 py-2 text-center">Grade</th>
+					<th class="px-3 py-2 text-center">Merit</th>
+					<th class="px-3 py-2 text-center">Result</th>
+					<th class="px-3 py-2 text-right">Actions</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					if data != nil {
+						for _, r := range data.Items {
+							<tr>
+								<td class="px-3 py-2">{ r.RollNumber }</td>
+								<td class="px-3 py-2">{ r.StudentName }</td>
+								<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.1f/%.1f", r.TotalObtained, r.TotalFull) }</td>
+								<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", r.GPA) }</td>
+								<td class="px-3 py-2 text-center">{ r.Grade }</td>
+								<td class="px-3 py-2 text-center">{ meritPos(r.MeritPosition) }</td>
+								<td class="px-3 py-2 text-center">{ passFail(r.IsPassed) }</td>
+								<td class="px-3 py-2 text-right">
+									<a href={ templ.SafeURL("/exams/" + exam.ID.String() + "/results/" + r.ID.String()) } class="text-indigo-600">View</a>
+									<a href={ templ.SafeURL("/report-cards/" + r.ID.String() + "/pdf") } class="ml-2 text-indigo-600">PDF</a>
+								</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ ExamResultDetail(exam *dto.ExamResponse, result *dto.ExamResultResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Result Detail", csrf, user, examResultDetailContent(exam, result, csrf))
+}
+
+templ examResultDetailContent(exam *dto.ExamResponse, result *dto.ExamResultResponse, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">{ result.StudentName }</h1>
+		<p class="text-slate-500">{ exam.Name } — { result.ClassName } / { result.SectionName }</p>
+		<div class="mt-4 flex gap-4 text-sm">
+			<span>GPA: <strong>{ fmt.Sprintf("%.2f", result.GPA) }</strong></span>
+			<span>CGPA: <strong>{ fmt.Sprintf("%.2f", result.CGPA) }</strong></span>
+			<span>Grade: <strong>{ result.Grade }</strong></span>
+			<span>Result: <strong>{ passFail(result.IsPassed) }</strong></span>
+		</div>
+		<div class="mt-6 overflow-x-auto rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-3 py-2 text-left">Subject</th>
+					<th class="px-3 py-2 text-right">Written</th>
+					<th class="px-3 py-2 text-right">MCQ</th>
+					<th class="px-3 py-2 text-right">Practical</th>
+					<th class="px-3 py-2 text-right">Total</th>
+					<th class="px-3 py-2 text-center">Status</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, s := range result.Subjects {
+						<tr>
+							<td class="px-3 py-2">{ s.SubjectName }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.0f", s.WrittenScore) }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.0f", s.MCQScore) }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.0f", s.PracticalScore) }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.0f", s.TotalScore) }</td>
+							<td class="px-3 py-2 text-center">{ passFail(s.IsPassed) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<a href={ templ.SafeURL("/report-cards/" + result.ID.String() + "/pdf") } class="mt-4 inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Download Report Card</a>
+	</div>
+}
+
+templ Tabulation(exam *dto.ExamResponse, results []dto.ExamResultResponse, sectionID *uuid.UUID, formData *ExamFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Tabulation Sheet", csrf, user, tabulationContent(exam, results, sectionID, formData, csrf))
+}
+
+templ tabulationContent(exam *dto.ExamResponse, results []dto.ExamResultResponse, sectionID *uuid.UUID, formData *ExamFormData, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Tabulation — { exam.Name }</h1>
+		<form method="GET" class="mt-4 flex gap-2">
+			<select name="section_id" class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">All Sections</option>
+				if formData != nil {
+					for _, sec := range formData.Sections {
+						<option value={ sec.ID.String() } selected?={ sectionID != nil && *sectionID == sec.ID }>{ sec.Name }</option>
+					}
+				}
+			</select>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Filter</button>
+		</form>
+		<div class="mt-4 flex gap-2">
+			<a href={ tabulationExportURL(exam.ID, sectionID, "pdf") } class="rounded-lg border px-3 py-1.5 text-sm">PDF</a>
+			<a href={ tabulationExportURL(exam.ID, sectionID, "csv") } class="rounded-lg border px-3 py-1.5 text-sm">CSV</a>
+			<a href={ tabulationExportURL(exam.ID, sectionID, "xlsx") } class="rounded-lg border px-3 py-1.5 text-sm">Excel</a>
+		</div>
+		@examResultsTable(results)
+	</div>
+}
+
+templ MeritList(exam *dto.ExamResponse, results []dto.ExamResultResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Merit List", csrf, user, meritListContent(exam, results))
+}
+
+templ meritListContent(exam *dto.ExamResponse, results []dto.ExamResultResponse) {
+	<div>
+		<h1 class="text-2xl font-bold">Merit List — { exam.Name }</h1>
+		@examResultsTable(results)
+	</div>
+}
+
+templ examResultsTable(results []dto.ExamResultResponse) {
+	<div class="mt-6 overflow-x-auto rounded-xl border bg-white">
+		<table class="min-w-full text-sm">
+			<thead class="bg-slate-50"><tr>
+				<th class="px-3 py-2 text-center">Merit</th>
+				<th class="px-3 py-2 text-left">Roll</th>
+				<th class="px-3 py-2 text-left">Student</th>
+				<th class="px-3 py-2 text-right">Total</th>
+				<th class="px-3 py-2 text-right">GPA</th>
+				<th class="px-3 py-2 text-center">Grade</th>
+			</tr></thead>
+			<tbody class="divide-y">
+				for _, r := range results {
+					<tr>
+						<td class="px-3 py-2 text-center">{ meritPos(r.MeritPosition) }</td>
+						<td class="px-3 py-2">{ r.RollNumber }</td>
+						<td class="px-3 py-2">{ r.StudentName }</td>
+						<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.1f", r.TotalObtained) }</td>
+						<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", r.GPA) }</td>
+						<td class="px-3 py-2 text-center">{ r.Grade }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+templ GradingSystems(systems []dto.GradingSystemResponse, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Grading Systems", csrf, user, gradingSystemsContent(systems, flash, flashType, csrf))
+}
+
+templ gradingSystemsContent(systems []dto.GradingSystemResponse, flash, flashType, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Grading Systems</h1>
+		if flash != "" {
+			<div class={ flashClass(flashType) + " mt-4 rounded-lg px-4 py-2 text-sm" }>{ flash }</div>
+		}
+		<div class="mt-6 grid gap-4 md:grid-cols-2">
+			for _, sys := range systems {
+				<div class="rounded-xl border bg-white p-4">
+					<h2 class="font-semibold">{ sys.Name }</h2>
+					if sys.IsDefault {
+						<span class="text-xs text-emerald-600">Default</span>
+					}
+					<table class="mt-2 w-full text-xs">
+						for _, sc := range sys.Scales {
+							<tr><td>{ sc.Grade }</td><td class="text-right">{ fmt.Sprintf("%.0f-%.0f%%", sc.MinPercentage, sc.MaxPercentage) }</td><td class="text-right">{ fmt.Sprintf("%.2f", sc.GPAPoint) }</td></tr>
+						}
+					</table>
+				</div>
+			}
+		</div>
+		<form method="POST" action="/grading-systems" class="mt-8 max-w-md space-y-3 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<h2 class="font-semibold">Create Custom Grading System</h2>
+			<input name="name" required placeholder="System name" class="w-full rounded-lg border px-3 py-2"/>
+			<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="use_default" checked/> Use default GPA scale</label>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create</button>
+		</form>
+	</div>
+}
+
+templ ParentResults(student *dto.StudentResponse, results []dto.ExamResultResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Student Results", csrf, user, parentResultsContent(student, results))
+}
+
+templ parentResultsContent(student *dto.StudentResponse, results []dto.ExamResultResponse) {
+	<div>
+		<h1 class="text-2xl font-bold">Published Results</h1>
+		if student != nil {
+			<p class="text-slate-500">{ student.FirstName } { student.LastName } — { student.AdmissionNumber }</p>
+		}
+		<div class="mt-6 grid gap-3">
+			for _, r := range results {
+				<div class="flex items-center justify-between rounded-xl border bg-white p-4">
+					<div>
+						<h2 class="font-semibold">{ r.ExamName }</h2>
+						<p class="text-sm text-slate-500">GPA { fmt.Sprintf("%.2f", r.GPA) } — Grade { r.Grade }</p>
+					</div>
+					<div class="flex gap-2">
+						<a href={ templ.SafeURL("/parent/students/" + r.StudentID.String() + "/results/" + r.ExamID.String()) } class="text-indigo-600 text-sm">View</a>
+						<a href={ templ.SafeURL("/parent/students/" + r.StudentID.String() + "/results/" + r.ExamID.String() + "/report-card") } class="text-indigo-600 text-sm">Report Card</a>
+					</div>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ ParentResult(result *dto.ExamResultResponse, studentID uuid.UUID, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Result", csrf, user, parentResultContent(result, studentID))
+}
+
+templ parentResultContent(result *dto.ExamResultResponse, studentID uuid.UUID) {
+	<div>
+		<h1 class="text-2xl font-bold">{ result.ExamName }</h1>
+		<p class="text-slate-500">{ result.StudentName }</p>
+		<div class="mt-4 flex gap-4 text-sm">
+			<span>GPA: { fmt.Sprintf("%.2f", result.GPA) }</span>
+			<span>Grade: { result.Grade }</span>
+			<span>Result: { passFail(result.IsPassed) }</span>
+		</div>
+		<a href={ templ.SafeURL("/parent/students/" + studentID.String() + "/results/" + result.ExamID.String() + "/report-card") } class="mt-4 inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Download Report Card</a>
+	</div>
+}
+
+templ ExamReportSummary(exam *dto.ExamResponse, stats *dto.ExamDashboardStats, formData *ExamFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Exam Report Summary", csrf, user, examReportSummaryContent(exam, stats, formData, csrf))
+}
+
+templ examReportSummaryContent(exam *dto.ExamResponse, stats *dto.ExamDashboardStats, formData *ExamFormData, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Result Summary</h1>
+		@examReportFilter(formData, examReportID(exam))
+		if stats != nil && exam != nil {
+			<div class="mt-6 grid gap-4 sm:grid-cols-3">
+				@statCard("Passed", strconv.FormatInt(stats.StudentsPassed, 10))
+				@statCard("Failed", strconv.FormatInt(stats.StudentsFailed, 10))
+				@statCard("Pass Rate", fmt.Sprintf("%.1f%%", stats.PassRate))
+			</div>
+		}
+	</div>
+}
+
+templ ExamReportSubject(exam *dto.ExamResponse, stats *dto.ExamDashboardStats, formData *ExamFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Subject Performance", csrf, user, examReportSubjectContent(exam, stats, formData, csrf))
+}
+
+templ examReportSubjectContent(exam *dto.ExamResponse, stats *dto.ExamDashboardStats, formData *ExamFormData, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Subject Performance</h1>
+		@examReportFilter(formData, examReportID(exam))
+		if stats != nil {
+			<ul class="mt-6 space-y-2 rounded-xl border bg-white p-6 text-sm">
+				for _, s := range stats.SubjectPerformance {
+					<li class="flex justify-between"><span>{ s.SubjectName }</span><span>Avg { fmt.Sprintf("%.1f", s.AvgScore) } — { fmt.Sprintf("%.1f%% pass", s.PassRate) }</span></li>
+				}
+			</ul>
+		}
+	</div>
+}
+
+templ ExamReportTop(exam *dto.ExamResponse, results []dto.ExamResultResponse, formData *ExamFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Top Students", csrf, user, examReportTopContent(exam, results, formData, csrf))
+}
+
+templ examReportTopContent(exam *dto.ExamResponse, results []dto.ExamResultResponse, formData *ExamFormData, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Top Students</h1>
+		@examReportFilter(formData, examReportID(exam))
+		@examResultsTable(results)
+	</div>
+}
+
+templ ExamReportFailed(exam *dto.ExamResponse, results []dto.ExamResultResponse, formData *ExamFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Failed Students", csrf, user, examReportFailedContent(exam, results, formData, csrf))
+}
+
+templ examReportFailedContent(exam *dto.ExamResponse, results []dto.ExamResultResponse, formData *ExamFormData, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Failed Students</h1>
+		@examReportFilter(formData, examReportID(exam))
+		@examResultsTable(results)
+	</div>
+}
+
+templ examReportFilter(formData *ExamFormData, selectedExamID uuid.UUID) {
+	<form method="GET" class="mt-4 flex gap-2">
+		<select name="exam_id" class="rounded-lg border px-3 py-2 text-sm">
+			<option value="">Select exam</option>
+			if formData != nil {
+				for _, e := range formData.Exams {
+					<option value={ e.ID.String() } selected?={ selectedExamID != uuid.Nil && selectedExamID == e.ID }>{ e.Name }</option>
+				}
+			}
+		</select>
+		<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Load</button>
+	</form>
+}
+
+func examReportID(exam *dto.ExamResponse) uuid.UUID {
+	if exam == nil {
+		return uuid.Nil
+	}
+	return exam.ID
+}
+
+func flashClass(flashType string) string {
+	if flashType == "error" {
+		return "bg-red-50 text-red-700"
+	}
+	return "bg-emerald-50 text-emerald-700"
+}
+
+func examTypeLabel(t string) string {
+	labels := map[string]string{
+		"first_terminal": "First Terminal", "mid_term": "Mid Term", "half_yearly": "Half Yearly",
+		"annual": "Annual", "test_exam": "Test Exam", "model_test": "Model Test",
+	}
+	if l, ok := labels[t]; ok {
+		return l
+	}
+	return t
+}
+
+func examFormAction(exam *dto.ExamResponse) string {
+	if exam == nil {
+		return "/exams"
+	}
+	return "/exams/" + exam.ID.String()
+}
+
+func examFieldName(exam *dto.ExamResponse) string {
+	if exam == nil {
+		return ""
+	}
+	return exam.Name
+}
+
+func examStartDate(exam *dto.ExamResponse) string {
+	if exam == nil {
+		return ""
+	}
+	return exam.StartDate.Format("2006-01-02")
+}
+
+func examEndDate(exam *dto.ExamResponse) string {
+	if exam == nil {
+		return ""
+	}
+	return exam.EndDate.Format("2006-01-02")
+}
+
+func examTotalMarks(exam *dto.ExamResponse) string {
+	if exam == nil {
+		return "100"
+	}
+	return fmt.Sprintf("%.0f", exam.TotalMarks)
+}
+
+func examPassMarks(exam *dto.ExamResponse) string {
+	if exam == nil {
+		return "40"
+	}
+	return fmt.Sprintf("%.0f", exam.PassingMarks)
+}
+
+func examSessionSelected(exam *dto.ExamResponse, id uuid.UUID) bool {
+	return exam != nil && exam.SessionID == id
+}
+
+func examClassSelected(exam *dto.ExamResponse, id uuid.UUID) bool {
+	return exam != nil && exam.ClassID == id
+}
+
+func examGradingSelected(exam *dto.ExamResponse, id uuid.UUID) bool {
+	return exam != nil && exam.GradingSystemID != nil && *exam.GradingSystemID == id
+}
+
+func marksSubjectLinkClass(active *dto.ExamSubjectResponse, id uuid.UUID) string {
+	base := "rounded-lg border px-3 py-1.5 text-sm "
+	if active != nil && active.ID == id {
+		return base + "bg-indigo-600 text-white"
+	}
+	return base
+}
+
+func meritPos(p *int) string {
+	if p == nil {
+		return "-"
+	}
+	return strconv.Itoa(*p)
+}
+
+func passFail(ok bool) string {
+	if ok {
+		return "Pass"
+	}
+	return "Fail"
+}
+
+func examDashboardCount(stats *dto.ExamDashboardStats, kind string) string {
+	if stats == nil {
+		return "0"
+	}
+	switch kind {
+	case "active":
+		return strconv.FormatInt(stats.ActiveExams, 10)
+	case "published":
+		return strconv.FormatInt(stats.PublishedResults, 10)
+	case "passed":
+		return strconv.FormatInt(stats.StudentsPassed, 10)
+	case "failed":
+		return strconv.FormatInt(stats.StudentsFailed, 10)
+	}
+	return "0"
+}
+
+func tabulationExportURL(examID uuid.UUID, sectionID *uuid.UUID, format string) templ.SafeURL {
+	url := "/exams/" + examID.String() + "/tabulation/export." + format
+	if sectionID != nil {
+		url += "?section_id=" + sectionID.String()
+	}
+	return templ.SafeURL(url)
+}

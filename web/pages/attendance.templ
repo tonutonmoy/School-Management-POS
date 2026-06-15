@@ -1,0 +1,534 @@
+package pages
+
+import (
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+type AttendanceFormData struct {
+	Sessions  []dto.AcademicSessionResponse
+	Classes   []dto.ClassResponse
+	Sections  []dto.SectionResponse
+	Teachers  []dto.TeacherResponse
+	Staff     []dto.StaffResponse
+}
+
+templ StudentAttendance(rows []dto.StudentAttendanceRow, filter dto.AttendanceFilter, formData *AttendanceFormData, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Student Attendance", csrf, user, studentAttendanceContent(rows, filter, formData, flash, flashType, csrf))
+}
+
+templ studentAttendanceContent(rows []dto.StudentAttendanceRow, filter dto.AttendanceFilter, formData *AttendanceFormData, flash, flashType, csrf string) {
+	<div>
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<h1 class="text-2xl font-bold">Student Attendance</h1>
+			<div class="flex gap-2">
+				<a href="/attendance/dashboard" class="rounded-lg border px-3 py-2 text-sm">Dashboard</a>
+				<a href="/reports/attendance/students/daily" class="rounded-lg border px-3 py-2 text-sm">Reports</a>
+			</div>
+		</div>
+		@components.Flash(flash, flashType)
+		<form method="GET" class="mt-4 flex flex-wrap gap-2 rounded-xl border bg-white p-4">
+			<select name="session_id" required class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">Session</option>
+				for _, s := range formData.Sessions {
+					<option value={ s.ID.String() } selected?={ filter.SessionID == s.ID }>{ s.Name }</option>
+				}
+			</select>
+			<select name="class_id" required class="rounded-lg border px-3 py-2 text-sm"
+				hx-get="/api/sections" hx-target="#section-picker" hx-trigger="change" hx-include="[name='class_id']">
+				<option value="">Class</option>
+				for _, cl := range formData.Classes {
+					<option value={ cl.ID.String() } selected?={ filter.ClassID == cl.ID }>{ cl.Name }</option>
+				}
+			</select>
+			<div id="section-picker">
+				@attendanceSectionSelect(filter.SectionID, formData.Sections)
+			</div>
+			<input type="date" name="date" value={ filter.Date.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Load</button>
+		</form>
+		if len(rows) > 0 {
+			<form method="POST" action="/attendance/students" class="mt-4">
+				@components.CSRFInput(csrf)
+				<input type="hidden" name="session_id" value={ filter.SessionID.String() }/>
+				<input type="hidden" name="class_id" value={ filter.ClassID.String() }/>
+				<input type="hidden" name="section_id" value={ filter.SectionID.String() }/>
+				<input type="hidden" name="date" value={ filter.Date.Format("2006-01-02") }/>
+				<div class="overflow-hidden rounded-xl border bg-white">
+					<table class="min-w-full divide-y text-sm">
+						<thead class="bg-slate-50"><tr>
+							<th class="px-4 py-3 text-left">Roll</th>
+							<th class="px-4 py-3 text-left">Student</th>
+							<th class="px-4 py-3 text-left">Status</th>
+							<th class="px-4 py-3 text-left">Remarks</th>
+						</tr></thead>
+						<tbody class="divide-y">
+							for _, r := range rows {
+								<tr>
+									<td class="px-4 py-3">{ r.RollNumber }</td>
+									<td class="px-4 py-3 font-medium">{ r.FullName }</td>
+									<td class="px-4 py-3">
+										@attendanceStatusSelect("status_"+r.StudentID.String(), r.Status)
+									</td>
+									<td class="px-4 py-3">
+										<input name={ "remarks_" + r.StudentID.String() } value={ r.Remarks } class="w-full rounded border px-2 py-1 text-sm"/>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				<div class="mt-4 flex gap-2">
+					<button type="button" onclick="markAll('present')" class="rounded-lg bg-emerald-600 px-3 py-2 text-sm text-white">All Present</button>
+					<button type="button" onclick="markAll('absent')" class="rounded-lg bg-red-600 px-3 py-2 text-sm text-white">All Absent</button>
+					<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save Attendance</button>
+				</div>
+			</form>
+			<script>
+				function markAll(status) {
+					document.querySelectorAll('select[name^="status_"]').forEach(s => s.value = status);
+				}
+			</script>
+		} else if filter.SessionID != uuid.Nil {
+			<p class="mt-6 text-slate-500">No students found for the selected filters.</p>
+		}
+	</div>
+}
+
+templ attendanceSectionSelect(selected uuid.UUID, sections []dto.SectionResponse) {
+	<select name="section_id" required class="rounded-lg border px-3 py-2 text-sm">
+		<option value="">Section</option>
+		for _, sec := range sections {
+			<option value={ sec.ID.String() } selected?={ selected == sec.ID }>{ sec.Name }</option>
+		}
+	</select>
+}
+
+templ attendanceStatusSelect(name, current string) {
+	<select name={ name } class="rounded-lg border px-2 py-1 text-sm">
+		<option value="present" selected?={ current == "present" }>Present</option>
+		<option value="absent" selected?={ current == "absent" }>Absent</option>
+		<option value="late" selected?={ current == "late" }>Late</option>
+		<option value="leave" selected?={ current == "leave" }>Leave</option>
+	</select>
+}
+
+templ TeacherAttendance(rows []dto.TeacherAttendanceRow, date time.Time, query, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Teacher Attendance", csrf, user, teacherAttendanceContent(rows, date, query, flash, flashType, csrf))
+}
+
+templ teacherAttendanceContent(rows []dto.TeacherAttendanceRow, date time.Time, query, flash, flashType, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Teacher Attendance</h1>
+		@components.Flash(flash, flashType)
+		<form method="GET" class="mt-4 flex flex-wrap gap-2">
+			<input type="date" name="date" value={ date.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+			<input name="q" value={ query } placeholder="Search..." class="rounded-lg border px-3 py-2 text-sm"/>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Load</button>
+		</form>
+		<form method="POST" action="/attendance/teachers" class="mt-4">
+			@components.CSRFInput(csrf)
+			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
+			<div class="overflow-hidden rounded-xl border bg-white">
+				<table class="min-w-full divide-y text-sm">
+					<thead class="bg-slate-50"><tr>
+						<th class="px-4 py-3 text-left">ID</th>
+						<th class="px-4 py-3 text-left">Teacher</th>
+						<th class="px-4 py-3 text-left">Department</th>
+						<th class="px-4 py-3 text-left">Status</th>
+					</tr></thead>
+					<tbody class="divide-y">
+						for _, r := range rows {
+							<tr>
+								<td class="px-4 py-3">{ r.EmployeeID }</td>
+								<td class="px-4 py-3 font-medium">{ r.FullName }</td>
+								<td class="px-4 py-3">{ r.Department }</td>
+								<td class="px-4 py-3">
+									@attendanceStatusSelect("status_"+r.TeacherID.String(), r.Status)
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<button type="submit" class="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save Attendance</button>
+		</form>
+	</div>
+}
+
+templ StaffAttendance(rows []dto.StaffAttendanceRow, date time.Time, query, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Staff Attendance", csrf, user, staffAttendanceContent(rows, date, query, flash, flashType, csrf))
+}
+
+templ staffAttendanceContent(rows []dto.StaffAttendanceRow, date time.Time, query, flash, flashType, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Staff Attendance</h1>
+		@components.Flash(flash, flashType)
+		<form method="GET" class="mt-4 flex flex-wrap gap-2">
+			<input type="date" name="date" value={ date.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+			<input name="q" value={ query } placeholder="Search..." class="rounded-lg border px-3 py-2 text-sm"/>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Load</button>
+		</form>
+		<form method="POST" action="/attendance/staff" class="mt-4">
+			@components.CSRFInput(csrf)
+			<input type="hidden" name="date" value={ date.Format("2006-01-02") }/>
+			<div class="overflow-hidden rounded-xl border bg-white">
+				<table class="min-w-full divide-y text-sm">
+					<thead class="bg-slate-50"><tr>
+						<th class="px-4 py-3 text-left">ID</th>
+						<th class="px-4 py-3 text-left">Staff</th>
+						<th class="px-4 py-3 text-left">Department</th>
+						<th class="px-4 py-3 text-left">Status</th>
+					</tr></thead>
+					<tbody class="divide-y">
+						for _, r := range rows {
+							<tr>
+								<td class="px-4 py-3">{ r.EmployeeID }</td>
+								<td class="px-4 py-3 font-medium">{ r.Name }</td>
+								<td class="px-4 py-3">{ r.Department }</td>
+								<td class="px-4 py-3">
+									@attendanceStatusSelect("status_"+r.StaffID.String(), r.Status)
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<button type="submit" class="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save Attendance</button>
+		</form>
+	</div>
+}
+
+templ AttendanceDashboard(stats *dto.AttendanceDashboardStats, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Attendance Dashboard", csrf, user, attendanceDashboardContent(stats))
+}
+
+templ attendanceDashboardContent(stats *dto.AttendanceDashboardStats) {
+	<div>
+		<h1 class="text-2xl font-bold">Attendance Dashboard</h1>
+		<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			@components.StatCard("Students Present", strconv.FormatInt(stats.StudentPresentToday, 10), "text-emerald-600")
+			@components.StatCard("Students Absent", strconv.FormatInt(stats.StudentAbsentToday, 10), "text-red-600")
+			@components.StatCard("Teachers Present", strconv.FormatInt(stats.TeacherPresentToday, 10), "text-indigo-600")
+			@components.StatCard("Staff Present", strconv.FormatInt(stats.StaffPresentToday, 10), "text-amber-600")
+		</div>
+		<div class="mt-8 grid gap-6 lg:grid-cols-2">
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="text-lg font-semibold">Monthly Attendance Trend</h2>
+				<div class="mt-4 space-y-2">
+					for _, t := range stats.MonthlyTrend {
+						<div class="flex items-center justify-between text-sm">
+							<span>{ t.Date.Format("Jan 2") }</span>
+							<span class="text-emerald-600">P: { strconv.FormatInt(t.Present, 10) }</span>
+							<span class="text-red-600">A: { strconv.FormatInt(t.Absent, 10) }</span>
+							<span class="text-amber-600">L: { strconv.FormatInt(t.Late, 10) }</span>
+						</div>
+					}
+					if len(stats.MonthlyTrend) == 0 {
+						<p class="text-sm text-slate-500">No attendance data yet.</p>
+					}
+				</div>
+			</div>
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="text-lg font-semibold">Class Wise Attendance Today</h2>
+				<div class="mt-4 space-y-2">
+					for _, c := range stats.ClassWiseToday {
+						<div class="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2 text-sm">
+							<span class="font-medium">{ c.ClassName }</span>
+							<span>{ strconv.FormatInt(c.Present, 10) }/{ strconv.FormatInt(c.Total, 10) } present</span>
+						</div>
+					}
+					if len(stats.ClassWiseToday) == 0 {
+						<p class="text-sm text-slate-500">No class attendance marked today.</p>
+					}
+				</div>
+			</div>
+		</div>
+		<div class="mt-6 flex flex-wrap gap-2">
+			<a href="/attendance/students" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Mark Student Attendance</a>
+			<a href="/attendance/teachers" class="rounded-lg border px-4 py-2 text-sm">Teacher Attendance</a>
+			<a href="/attendance/staff" class="rounded-lg border px-4 py-2 text-sm">Staff Attendance</a>
+			<a href="/leave" class="rounded-lg border px-4 py-2 text-sm">Leave Requests</a>
+		</div>
+	</div>
+}
+
+templ LeaveList(data *dto.PaginatedLeaveRequests, filter dto.LeaveFilter, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Leave Management", csrf, user, leaveListContent(data, filter, csrf))
+}
+
+templ leaveListContent(data *dto.PaginatedLeaveRequests, filter dto.LeaveFilter, csrf string) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Leave Requests</h1>
+			<a href="/leave/apply" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Apply Leave</a>
+		</div>
+		<form method="GET" class="mt-4 flex flex-wrap gap-2">
+			<select name="entity_type" class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">All types</option>
+				<option value="teacher" selected?={ filter.EntityType == "teacher" }>Teacher</option>
+				<option value="staff" selected?={ filter.EntityType == "staff" }>Staff</option>
+			</select>
+			<select name="status" class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">All status</option>
+				<option value="pending" selected?={ filter.Status == "pending" }>Pending</option>
+				<option value="approved" selected?={ filter.Status == "approved" }>Approved</option>
+				<option value="rejected" selected?={ filter.Status == "rejected" }>Rejected</option>
+			</select>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Filter</button>
+		</form>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Employee</th>
+					<th class="px-4 py-3 text-left">Type</th>
+					<th class="px-4 py-3 text-left">Dates</th>
+					<th class="px-4 py-3 text-left">Status</th>
+					<th class="px-4 py-3 text-right">Actions</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, l := range data.Items {
+						<tr>
+							<td class="px-4 py-3">
+								<div class="font-medium">{ l.EmployeeName }</div>
+								<div class="text-xs text-slate-500">{ l.EmployeeID }</div>
+							</td>
+							<td class="px-4 py-3">{ l.LeaveType }</td>
+							<td class="px-4 py-3">{ l.StartDate.Format("2006-01-02") } — { l.EndDate.Format("2006-01-02") }</td>
+							<td class="px-4 py-3">
+								<span class={ leaveStatusClass(l.Status) }>{ l.Status }</span>
+							</td>
+							<td class="px-4 py-3 text-right">
+								if l.Status == "pending" {
+									<form method="POST" action={ templ.SafeURL("/leave/" + l.ID.String() + "/approve") } class="inline">
+										@components.CSRFInput(csrf)
+										<button type="submit" class="text-emerald-600">Approve</button>
+									</form>
+									<form method="POST" action={ templ.SafeURL("/leave/" + l.ID.String() + "/reject") } class="ml-2 inline">
+										@components.CSRFInput(csrf)
+										<button type="submit" class="text-red-600">Reject</button>
+									</form>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+func leaveStatusClass(status string) string {
+	switch status {
+	case "approved":
+		return "rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700"
+	case "rejected":
+		return "rounded-full bg-red-100 px-2 py-0.5 text-xs text-red-700"
+	default:
+		return "rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700"
+	}
+}
+
+templ LeaveApply(formData *AttendanceFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Apply Leave", csrf, user, leaveApplyContent(formData, csrf))
+}
+
+templ leaveApplyContent(formData *AttendanceFormData, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">Apply Leave</h1>
+		<form method="POST" action="/leave" class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<select name="entity_type" required class="w-full rounded-lg border px-3 py-2" id="entity-type">
+				<option value="teacher">Teacher</option>
+				<option value="staff">Staff</option>
+			</select>
+			<select name="teacher_id" class="w-full rounded-lg border px-3 py-2">
+				<option value="">Select teacher</option>
+				for _, t := range formData.Teachers {
+					<option value={ t.ID.String() }>{ t.FullName } ({ t.EmployeeID })</option>
+				}
+			</select>
+			<select name="staff_id" class="w-full rounded-lg border px-3 py-2">
+				<option value="">Select staff</option>
+				for _, s := range formData.Staff {
+					<option value={ s.ID.String() }>{ s.FullName } ({ s.EmployeeID })</option>
+				}
+			</select>
+			<select name="leave_type" required class="w-full rounded-lg border px-3 py-2">
+				<option value="casual">Casual</option>
+				<option value="sick">Sick</option>
+				<option value="annual">Annual</option>
+				<option value="emergency">Emergency</option>
+			</select>
+			<input type="date" name="start_date" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="date" name="end_date" required class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="reason" placeholder="Reason" class="w-full rounded-lg border px-3 py-2"></textarea>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Submit</button>
+		</form>
+	</div>
+}
+
+templ ParentAttendance(summary *dto.StudentAttendanceSummary, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Student Attendance Summary", csrf, user, parentAttendanceContent(summary))
+}
+
+templ parentAttendanceContent(summary *dto.StudentAttendanceSummary) {
+	<div>
+		<h1 class="text-2xl font-bold">Attendance Summary</h1>
+		<p class="mt-1 text-slate-500">{ summary.StudentName }</p>
+		<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			@components.StatCard("Present Days", strconv.FormatInt(summary.PresentDays, 10), "text-emerald-600")
+			@components.StatCard("Absent Days", strconv.FormatInt(summary.AbsentDays, 10), "text-red-600")
+			@components.StatCard("Late Days", strconv.FormatInt(summary.LateDays, 10), "text-amber-600")
+			@components.StatCard("Attendance %", fmt.Sprintf("%.1f%%", summary.AttendancePct), "text-indigo-600")
+		</div>
+		<a href={ templ.SafeURL("/reports/attendance/students/" + summary.StudentID.String() + "/history") } class="mt-6 inline-block text-indigo-600">View full history →</a>
+	</div>
+}
+
+templ StudentAttendanceReport(title string, records []dto.StudentAttendanceResponse, filter dto.AttendanceReportFilter, formData *AttendanceFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, studentAttendanceReportContent(title, records, filter, formData))
+}
+
+templ studentAttendanceReportContent(title string, records []dto.StudentAttendanceResponse, filter dto.AttendanceReportFilter, formData *AttendanceFormData) {
+	<div>
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<h1 class="text-2xl font-bold">{ title }</h1>
+			<div class="flex gap-2">
+				<a href="/reports/attendance/students/export.csv" class="rounded-lg border px-3 py-2 text-sm">CSV</a>
+				<a href="/reports/attendance/students/export.xlsx" class="rounded-lg border px-3 py-2 text-sm">Excel</a>
+			</div>
+		</div>
+		<form method="GET" class="mt-4 flex flex-wrap gap-2">
+			<input type="date" name="from" value={ filter.From.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+			<input type="date" name="to" value={ filter.To.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Filter</button>
+		</form>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Date</th>
+					<th class="px-4 py-3 text-left">Student</th>
+					<th class="px-4 py-3 text-left">Class</th>
+					<th class="px-4 py-3 text-left">Status</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, r := range records {
+						<tr>
+							<td class="px-4 py-3">{ r.AttendanceDate.Format("2006-01-02") }</td>
+							<td class="px-4 py-3">{ r.StudentName }</td>
+							<td class="px-4 py-3">{ r.ClassName } / { r.SectionName }</td>
+							<td class="px-4 py-3">{ r.Status }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ ClassWiseAttendanceReport(groups []dto.ClassAttendanceSummary, date time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Class Wise Attendance", csrf, user, classWiseReportContent(groups, date))
+}
+
+templ classWiseReportContent(groups []dto.ClassAttendanceSummary, date time.Time) {
+	<div>
+		<h1 class="text-2xl font-bold">Class Wise Attendance</h1>
+		<p class="text-slate-500">{ date.Format("Monday, Jan 2, 2006") }</p>
+		<div class="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+			for _, g := range groups {
+				<div class="rounded-xl border bg-white p-4">
+					<h2 class="font-semibold">{ g.ClassName }</h2>
+					<div class="mt-2 grid grid-cols-2 gap-2 text-sm">
+						<span class="text-emerald-600">Present: { strconv.FormatInt(g.Present, 10) }</span>
+						<span class="text-red-600">Absent: { strconv.FormatInt(g.Absent, 10) }</span>
+						<span class="text-amber-600">Late: { strconv.FormatInt(g.Late, 10) }</span>
+						<span class="text-slate-600">Leave: { strconv.FormatInt(g.Leave, 10) }</span>
+					</div>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ StudentHistoryReport(records []dto.StudentAttendanceResponse, summary *dto.StudentAttendanceSummary, total int64, page int, studentID uuid.UUID, from, to time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Student Attendance History", csrf, user, studentHistoryContent(records, summary, total, page, studentID, from, to))
+}
+
+templ studentHistoryContent(records []dto.StudentAttendanceResponse, summary *dto.StudentAttendanceSummary, total int64, page int, studentID uuid.UUID, from, to time.Time) {
+	<div>
+		<h1 class="text-2xl font-bold">Attendance History</h1>
+		if summary != nil {
+			<p class="text-slate-500">{ summary.StudentName }</p>
+			<div class="mt-4 grid gap-3 sm:grid-cols-4">
+				@components.StatCard("Present", strconv.FormatInt(summary.PresentDays, 10), "text-emerald-600")
+				@components.StatCard("Absent", strconv.FormatInt(summary.AbsentDays, 10), "text-red-600")
+				@components.StatCard("Late", strconv.FormatInt(summary.LateDays, 10), "text-amber-600")
+				@components.StatCard("Leave", strconv.FormatInt(summary.LeaveDays, 10), "text-slate-600")
+			</div>
+		}
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Date</th>
+					<th class="px-4 py-3 text-left">Class</th>
+					<th class="px-4 py-3 text-left">Status</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, r := range records {
+						<tr>
+							<td class="px-4 py-3">{ r.AttendanceDate.Format("2006-01-02") }</td>
+							<td class="px-4 py-3">{ r.ClassName } / { r.SectionName }</td>
+							<td class="px-4 py-3">{ r.Status }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<p class="mt-4 text-sm text-slate-500">Total records: { strconv.FormatInt(total, 10) }</p>
+	</div>
+}
+
+templ EmployeeAttendanceReport(title string, records []dto.StudentAttendanceResponse, filter dto.AttendanceReportFilter, entity string, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, employeeAttendanceReportContent(title, records, filter, entity))
+}
+
+templ employeeAttendanceReportContent(title string, records []dto.StudentAttendanceResponse, filter dto.AttendanceReportFilter, entity string) {
+	<div>
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<h1 class="text-2xl font-bold">{ title }</h1>
+			<a href={ templ.SafeURL("/reports/attendance/" + entity + "s/export.csv") } class="rounded-lg border px-3 py-2 text-sm">CSV</a>
+		</div>
+		<form method="GET" class="mt-4 flex flex-wrap gap-2">
+			<input type="date" name="from" value={ filter.From.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+			<input type="date" name="to" value={ filter.To.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Filter</button>
+		</form>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Date</th>
+					<th class="px-4 py-3 text-left">Employee</th>
+					<th class="px-4 py-3 text-left">Department</th>
+					<th class="px-4 py-3 text-left">Status</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, r := range records {
+						<tr>
+							<td class="px-4 py-3">{ r.AttendanceDate.Format("2006-01-02") }</td>
+							<td class="px-4 py-3">{ r.StudentName }</td>
+							<td class="px-4 py-3">{ r.ClassName }</td>
+							<td class="px-4 py-3">{ r.Status }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}

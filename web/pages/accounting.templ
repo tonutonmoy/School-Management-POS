@@ -1,0 +1,710 @@
+package pages
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+type AccountingFormData struct {
+	Accounts   []dto.AccountResponse
+	Categories []dto.ExpenseCategoryResponse
+}
+
+templ AccountingDashboard(stats *dto.AccountingDashboardStats, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Accounting Dashboard", csrf, user, accountingDashboardContent(stats))
+}
+
+templ accountingDashboardContent(stats *dto.AccountingDashboardStats) {
+	<div>
+		<h1 class="text-2xl font-bold">Accounting Dashboard</h1>
+		<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			@acctStatCard("Cash Balance", acctFmt(stats, "cash"))
+			@acctStatCard("Bank Balance", acctFmt(stats, "bank"))
+			@acctStatCard("Monthly Income", acctFmt(stats, "income"))
+			@acctStatCard("Monthly Expense", acctFmt(stats, "expense"))
+		</div>
+		if stats != nil {
+			<p class="mt-4 text-sm text-slate-600">Net Profit (MTD): <strong>{ fmt.Sprintf("%.2f", stats.NetProfit) }</strong></p>
+			<div class="mt-6 grid gap-6 lg:grid-cols-2">
+				<div class="rounded-xl border bg-white p-6">
+					<h2 class="font-semibold">Income Trend</h2>
+					<ul class="mt-3 space-y-1 text-sm">
+						for _, t := range stats.IncomeTrend {
+							<li class="flex justify-between"><span>{ t.Label }</span><span>{ fmt.Sprintf("%.2f", t.Amount) }</span></li>
+						}
+					</ul>
+				</div>
+				<div class="rounded-xl border bg-white p-6">
+					<h2 class="font-semibold">Expense Trend</h2>
+					<ul class="mt-3 space-y-1 text-sm">
+						for _, t := range stats.ExpenseTrend {
+							<li class="flex justify-between"><span>{ t.Label }</span><span>{ fmt.Sprintf("%.2f", t.Amount) }</span></li>
+						}
+					</ul>
+				</div>
+			</div>
+		}
+		<div class="mt-6 flex flex-wrap gap-2">
+			<a href="/accounting/accounts" class="rounded-lg border px-3 py-1.5 text-sm">Chart of Accounts</a>
+			<a href="/accounting/journal" class="rounded-lg border px-3 py-1.5 text-sm">Journal Entries</a>
+			<a href="/reports/accounting/trial-balance" class="rounded-lg border px-3 py-1.5 text-sm">Trial Balance</a>
+			<a href="/expenses" class="rounded-lg border px-3 py-1.5 text-sm">Expenses</a>
+			<a href="/income" class="rounded-lg border px-3 py-1.5 text-sm">Income</a>
+		</div>
+	</div>
+}
+
+templ acctStatCard(label, value string) {
+	<div class="rounded-xl border bg-white p-5">
+		<p class="text-sm text-slate-500">{ label }</p>
+		<p class="mt-1 text-2xl font-bold">{ value }</p>
+	</div>
+}
+
+func acctFmt(stats *dto.AccountingDashboardStats, kind string) string {
+	if stats == nil {
+		return "0.00"
+	}
+	switch kind {
+	case "cash":
+		return fmt.Sprintf("%.2f", stats.CashBalance)
+	case "bank":
+		return fmt.Sprintf("%.2f", stats.BankBalance)
+	case "income":
+		return fmt.Sprintf("%.2f", stats.MonthlyIncome)
+	case "expense":
+		return fmt.Sprintf("%.2f", stats.MonthlyExpense)
+	}
+	return "0.00"
+}
+
+templ AccountList(accounts []dto.AccountResponse, filterType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Chart of Accounts", csrf, user, accountListContent(accounts, filterType, csrf))
+}
+
+templ accountListContent(accounts []dto.AccountResponse, filterType, csrf string) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Chart of Accounts</h1>
+			<a href="/accounting/accounts/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create Account</a>
+		</div>
+		<form method="GET" class="mt-4 flex gap-2">
+			<select name="type" class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">All Types</option>
+				<option value="assets" selected?={ filterType == "assets" }>Assets</option>
+				<option value="liabilities" selected?={ filterType == "liabilities" }>Liabilities</option>
+				<option value="equity" selected?={ filterType == "equity" }>Equity</option>
+				<option value="income" selected?={ filterType == "income" }>Income</option>
+				<option value="expenses" selected?={ filterType == "expenses" }>Expenses</option>
+			</select>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Filter</button>
+		</form>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Code</th>
+					<th class="px-4 py-3 text-left">Name</th>
+					<th class="px-4 py-3 text-left">Type</th>
+					<th class="px-4 py-3 text-right">Balance</th>
+					<th class="px-4 py-3 text-right">Actions</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, a := range accounts {
+						<tr>
+							<td class="px-4 py-3 font-mono">{ a.Code }</td>
+							<td class="px-4 py-3">{ a.Name }</td>
+							<td class="px-4 py-3 capitalize">{ a.AccountType }</td>
+							<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", a.Balance) }</td>
+							<td class="px-4 py-3 text-right">
+								if !a.IsSystem {
+									<a href={ templ.SafeURL("/accounting/accounts/" + a.ID.String() + "/edit") } class="text-indigo-600">Edit</a>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ AccountForm(title string, account *dto.AccountResponse, formData *AccountingFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, accountFormContent(title, account, formData, csrf))
+}
+
+templ accountFormContent(title string, account *dto.AccountResponse, formData *AccountingFormData, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ accountFormAction(account) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input name="code" required value={ acctFieldCode(account) } placeholder="Account code" class="w-full rounded-lg border px-3 py-2"/>
+			<input name="name" required value={ acctFieldName(account) } placeholder="Account name" class="w-full rounded-lg border px-3 py-2"/>
+			<select name="account_type" required class="w-full rounded-lg border px-3 py-2">
+				@acctTypeOpt("assets", account)
+				@acctTypeOpt("liabilities", account)
+				@acctTypeOpt("equity", account)
+				@acctTypeOpt("income", account)
+				@acctTypeOpt("expenses", account)
+			</select>
+			<select name="parent_id" class="w-full rounded-lg border px-3 py-2">
+				<option value="">No parent</option>
+				if formData != nil {
+					for _, a := range formData.Accounts {
+						<option value={ a.ID.String() } selected?={ account != nil && account.ParentID != nil && *account.ParentID == a.ID }>{ a.Code } — { a.Name }</option>
+					}
+				}
+			</select>
+			<textarea name="description" class="w-full rounded-lg border px-3 py-2">{ acctFieldDesc(account) }</textarea>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+templ acctTypeOpt(value string, account *dto.AccountResponse) {
+	<option value={ value } selected?={ account != nil && account.AccountType == value }>{ value }</option>
+}
+
+func accountFormAction(a *dto.AccountResponse) string {
+	if a == nil {
+		return "/accounting/accounts"
+	}
+	return "/accounting/accounts/" + a.ID.String()
+}
+func acctFieldCode(a *dto.AccountResponse) string { if a == nil { return "" }; return a.Code }
+func acctFieldName(a *dto.AccountResponse) string { if a == nil { return "" }; return a.Name }
+func acctFieldDesc(a *dto.AccountResponse) string { if a == nil { return "" }; return a.Description }
+
+templ JournalList(data *dto.PaginatedJournalEntries, from, to time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Journal Entries", csrf, user, journalListContent(data, from, to, csrf))
+}
+
+templ journalListContent(data *dto.PaginatedJournalEntries, from, to time.Time, csrf string) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Journal Entries</h1>
+			<a href="/accounting/journal/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">New Entry</a>
+		</div>
+		<div class="mt-6 overflow-x-auto rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-3 py-2 text-left">Entry #</th>
+					<th class="px-3 py-2 text-left">Date</th>
+					<th class="px-3 py-2 text-left">Description</th>
+					<th class="px-3 py-2 text-left">Source</th>
+					<th class="px-3 py-2 text-right">Debit</th>
+					<th class="px-3 py-2 text-right">Credit</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					if data != nil {
+						for _, e := range data.Items {
+							<tr>
+								<td class="px-3 py-2"><a href={ templ.SafeURL("/accounting/journal/" + e.ID.String()) } class="text-indigo-600">{ e.EntryNumber }</a></td>
+								<td class="px-3 py-2">{ e.EntryDate.Format("2006-01-02") }</td>
+								<td class="px-3 py-2">{ e.Description }</td>
+								<td class="px-3 py-2">{ e.SourceType }</td>
+								<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.TotalDebit) }</td>
+								<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.TotalCredit) }</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ JournalForm(formData *AccountingFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("New Journal Entry", csrf, user, journalFormContent(formData, csrf))
+}
+
+templ journalFormContent(formData *AccountingFormData, csrf string) {
+	<div class="max-w-3xl">
+		<h1 class="text-2xl font-bold">New Journal Entry</h1>
+		<form method="POST" action="/accounting/journal" class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input type="date" name="entry_date" required class="w-full rounded-lg border px-3 py-2"/>
+			<input name="description" required placeholder="Description" class="w-full rounded-lg border px-3 py-2"/>
+			<div class="space-y-2">
+				<p class="text-sm font-medium">Lines (debits must equal credits)</p>
+				for i := 0; i < 4; i++ {
+					<div class="grid grid-cols-4 gap-2">
+						<select name={ fmt.Sprintf("line_%d_account_id", i) } class="rounded-lg border px-2 py-1 text-sm col-span-2">
+							<option value="">Account</option>
+							if formData != nil {
+								for _, a := range formData.Accounts {
+									<option value={ a.ID.String() }>{ a.Code } — { a.Name }</option>
+								}
+							}
+						</select>
+						<input name={ fmt.Sprintf("line_%d_debit", i) } type="number" step="0.01" placeholder="Debit" class="rounded-lg border px-2 py-1 text-sm"/>
+						<input name={ fmt.Sprintf("line_%d_credit", i) } type="number" step="0.01" placeholder="Credit" class="rounded-lg border px-2 py-1 text-sm"/>
+					</div>
+				}
+			</div>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Post Entry</button>
+		</form>
+	</div>
+}
+
+templ JournalDetail(entry *dto.JournalEntryResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Journal Entry", csrf, user, journalDetailContent(entry))
+}
+
+templ journalDetailContent(entry *dto.JournalEntryResponse) {
+	<div>
+		<h1 class="text-2xl font-bold">{ entry.EntryNumber }</h1>
+		<p class="text-slate-500">{ entry.EntryDate.Format("2006-01-02") } — { entry.Description }</p>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-3 py-2 text-left">Account</th>
+					<th class="px-3 py-2 text-right">Debit</th>
+					<th class="px-3 py-2 text-right">Credit</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, l := range entry.Lines {
+						<tr>
+							<td class="px-3 py-2">{ l.AccountCode } — { l.AccountName }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", l.Debit) }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", l.Credit) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ LedgerPage(report *dto.LedgerReport, formData *AccountingFormData, from, to time.Time, accountID uuid.UUID, csrf string, user *dto.AuthUser) {
+	@layouts.Base("General Ledger", csrf, user, ledgerContent(report, formData, from, to, accountID))
+}
+
+templ ledgerContent(report *dto.LedgerReport, formData *AccountingFormData, from, to time.Time, accountID uuid.UUID) {
+	<div>
+		<h1 class="text-2xl font-bold">General Ledger</h1>
+		<form method="GET" class="mt-4 flex flex-wrap gap-2">
+			<select name="account_id" class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">Select account</option>
+				if formData != nil {
+					for _, a := range formData.Accounts {
+						<option value={ a.ID.String() } selected?={ accountID == a.ID }>{ a.Code } — { a.Name }</option>
+					}
+				}
+			</select>
+			<input type="date" name="from" value={ from.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+			<input type="date" name="to" value={ to.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Load</button>
+		</form>
+		if report != nil {
+			<p class="mt-4 text-sm">Opening: { fmt.Sprintf("%.2f", report.OpenBalance) } | Closing: { fmt.Sprintf("%.2f", report.CloseBalance) }</p>
+			<div class="mt-4 overflow-x-auto rounded-xl border bg-white">
+				<table class="min-w-full text-sm">
+					<thead class="bg-slate-50"><tr>
+						<th class="px-3 py-2 text-left">Date</th>
+						<th class="px-3 py-2 text-left">Entry</th>
+						<th class="px-3 py-2 text-left">Description</th>
+						<th class="px-3 py-2 text-right">Debit</th>
+						<th class="px-3 py-2 text-right">Credit</th>
+						<th class="px-3 py-2 text-right">Balance</th>
+					</tr></thead>
+					<tbody class="divide-y">
+						for _, e := range report.Entries {
+							<tr>
+								<td class="px-3 py-2">{ e.EntryDate.Format("2006-01-02") }</td>
+								<td class="px-3 py-2">{ e.EntryNumber }</td>
+								<td class="px-3 py-2">{ e.Description }</td>
+								<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.Debit) }</td>
+								<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.Credit) }</td>
+								<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.Balance) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+}
+
+templ CashBook(entries []dto.CashBookEntry, from, to time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Cash Book", csrf, user, bookContent("Cash Book", entries, from, to, true))
+}
+
+templ BankBook(entries []dto.BankBookEntry, from, to time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Bank Book", csrf, user, bankBookContent(entries, from, to))
+}
+
+templ bankBookContent(entries []dto.BankBookEntry, from, to time.Time) {
+	<div>
+		<h1 class="text-2xl font-bold">Bank Book</h1>
+		@dateFilter(from, to, "/accounting/bank-book")
+		<div class="mt-6 overflow-x-auto rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-3 py-2 text-left">Date</th>
+					<th class="px-3 py-2 text-left">Entry</th>
+					<th class="px-3 py-2 text-left">Description</th>
+					<th class="px-3 py-2 text-right">Deposit</th>
+					<th class="px-3 py-2 text-right">Withdrawal</th>
+					<th class="px-3 py-2 text-right">Balance</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, e := range entries {
+						<tr>
+							<td class="px-3 py-2">{ e.EntryDate.Format("2006-01-02") }</td>
+							<td class="px-3 py-2">{ e.EntryNumber }</td>
+							<td class="px-3 py-2">{ e.Description }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.Deposit) }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.Withdrawal) }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.Balance) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ bookContent(title string, entries []dto.CashBookEntry, from, to time.Time, cash bool) {
+	<div>
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		@dateFilter(from, to, "/accounting/cash-book")
+		<div class="mt-6 overflow-x-auto rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-3 py-2 text-left">Date</th>
+					<th class="px-3 py-2 text-left">Entry</th>
+					<th class="px-3 py-2 text-left">Description</th>
+					<th class="px-3 py-2 text-right">In</th>
+					<th class="px-3 py-2 text-right">Out</th>
+					<th class="px-3 py-2 text-right">Balance</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, e := range entries {
+						<tr>
+							<td class="px-3 py-2">{ e.EntryDate.Format("2006-01-02") }</td>
+							<td class="px-3 py-2">{ e.EntryNumber }</td>
+							<td class="px-3 py-2">{ e.Description }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.CashIn) }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.CashOut) }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.Balance) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ dateFilter(from, to time.Time, action string) {
+	<form method="GET" action={ templ.SafeURL(action) } class="mt-4 flex gap-2">
+		<input type="date" name="from" value={ from.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+		<input type="date" name="to" value={ to.Format("2006-01-02") } class="rounded-lg border px-3 py-2 text-sm"/>
+		<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Filter</button>
+	</form>
+}
+
+templ ExpenseList(data *dto.PaginatedExpenses, status string, from, to time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Expenses", csrf, user, expenseListContent(data, status, from, to, csrf))
+}
+
+templ expenseListContent(data *dto.PaginatedExpenses, status string, from, to time.Time, csrf string) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Expenses</h1>
+			<a href="/expenses/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Add Expense</a>
+		</div>
+		<div class="mt-6 overflow-x-auto rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-3 py-2 text-left">Date</th>
+					<th class="px-3 py-2 text-left">Category</th>
+					<th class="px-3 py-2 text-left">Description</th>
+					<th class="px-3 py-2 text-right">Amount</th>
+					<th class="px-3 py-2 text-left">Status</th>
+					<th class="px-3 py-2 text-right">Actions</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					if data != nil {
+						for _, e := range data.Items {
+							<tr>
+								<td class="px-3 py-2">{ e.ExpenseDate.Format("2006-01-02") }</td>
+								<td class="px-3 py-2">{ e.CategoryName }</td>
+								<td class="px-3 py-2">{ e.Description }</td>
+								<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.Amount) }</td>
+								<td class="px-3 py-2">{ e.Status }</td>
+								<td class="px-3 py-2 text-right">
+									if e.Status == "pending_approval" {
+										<form method="POST" action={ templ.SafeURL("/expenses/" + e.ID.String() + "/approve") } class="inline">
+											@components.CSRFInput(csrf)
+											<button type="submit" class="text-indigo-600 text-sm">Approve</button>
+										</form>
+									}
+								</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ ExpenseForm(formData *AccountingFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Add Expense", csrf, user, expenseFormContent(formData, csrf))
+}
+
+templ expenseFormContent(formData *AccountingFormData, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">Add Expense</h1>
+		<form method="POST" action="/expenses" class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<select name="category_id" required class="w-full rounded-lg border px-3 py-2">
+				<option value="">Category</option>
+				if formData != nil {
+					for _, c := range formData.Categories {
+						<option value={ c.ID.String() }>{ c.Name }</option>
+					}
+				}
+			</select>
+			<input name="amount" type="number" step="0.01" required placeholder="Amount" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="date" name="expense_date" required class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="description" required class="w-full rounded-lg border px-3 py-2" placeholder="Description"></textarea>
+			<select name="payment_method" class="w-full rounded-lg border px-3 py-2">
+				<option value="cash">Cash</option>
+				<option value="bank">Bank</option>
+			</select>
+			<select name="pay_from_account_id" required class="w-full rounded-lg border px-3 py-2">
+				<option value="">Pay from account</option>
+				if formData != nil {
+					for _, a := range formData.Accounts {
+						if a.AccountType == "assets" {
+							<option value={ a.ID.String() }>{ a.Code } — { a.Name }</option>
+						}
+					}
+				}
+			</select>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Submit</button>
+		</form>
+	</div>
+}
+
+templ IncomeList(entries []dto.IncomeEntryResponse, from, to time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Income", csrf, user, incomeListContent(entries, from, to))
+}
+
+templ incomeListContent(entries []dto.IncomeEntryResponse, from, to time.Time) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Non-Fee Income</h1>
+			<a href="/income/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Record Income</a>
+		</div>
+		<div class="mt-6 overflow-x-auto rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-3 py-2 text-left">Date</th>
+					<th class="px-3 py-2 text-left">Source</th>
+					<th class="px-3 py-2 text-left">Description</th>
+					<th class="px-3 py-2 text-right">Amount</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, e := range entries {
+						<tr>
+							<td class="px-3 py-2">{ e.IncomeDate.Format("2006-01-02") }</td>
+							<td class="px-3 py-2">{ e.Source }</td>
+							<td class="px-3 py-2">{ e.Description }</td>
+							<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", e.Amount) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ IncomeForm(formData *AccountingFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Record Income", csrf, user, incomeFormContent(formData, csrf))
+}
+
+templ incomeFormContent(formData *AccountingFormData, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">Record Income</h1>
+		<form method="POST" action="/income" class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<select name="source" required class="w-full rounded-lg border px-3 py-2">
+				<option value="donation">Donation</option>
+				<option value="event">Event Income</option>
+				<option value="admission_form">Admission Form Sales</option>
+				<option value="misc">Misc Income</option>
+			</select>
+			<input name="amount" type="number" step="0.01" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="date" name="income_date" required class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="description" required class="w-full rounded-lg border px-3 py-2"></textarea>
+			<select name="income_account_id" required class="w-full rounded-lg border px-3 py-2">
+				<option value="">Income account</option>
+				if formData != nil {
+					for _, a := range formData.Accounts {
+						if a.AccountType == "income" {
+							<option value={ a.ID.String() }>{ a.Code } — { a.Name }</option>
+						}
+					}
+				}
+			</select>
+			<select name="receive_to_account_id" required class="w-full rounded-lg border px-3 py-2">
+				<option value="">Receive to</option>
+				if formData != nil {
+					for _, a := range formData.Accounts {
+						if a.AccountType == "assets" {
+							<option value={ a.ID.String() }>{ a.Code } — { a.Name }</option>
+						}
+					}
+				}
+			</select>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+templ TrialBalanceReport(report *dto.TrialBalanceReport, asOf time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Trial Balance", csrf, user, trialBalanceContent(report, asOf))
+}
+
+templ trialBalanceContent(report *dto.TrialBalanceReport, asOf time.Time) {
+	<div>
+		<h1 class="text-2xl font-bold">Trial Balance</h1>
+		<div class="mt-4 flex gap-2">
+			<a href="/reports/accounting/trial-balance/export.csv" class="rounded-lg border px-3 py-1.5 text-sm">CSV</a>
+			<a href="/reports/accounting/trial-balance/export.xlsx" class="rounded-lg border px-3 py-1.5 text-sm">Excel</a>
+			<a href="/reports/accounting/trial-balance/export.pdf" class="rounded-lg border px-3 py-1.5 text-sm">PDF</a>
+		</div>
+		if report != nil {
+			@trialBalanceTable(report)
+		}
+	</div>
+}
+
+templ trialBalanceTable(report *dto.TrialBalanceReport) {
+	<div class="mt-6 overflow-x-auto rounded-xl border bg-white">
+		<table class="min-w-full text-sm">
+			<thead class="bg-slate-50"><tr>
+				<th class="px-3 py-2 text-left">Code</th>
+				<th class="px-3 py-2 text-left">Account</th>
+				<th class="px-3 py-2 text-right">Debit</th>
+				<th class="px-3 py-2 text-right">Credit</th>
+			</tr></thead>
+			<tbody class="divide-y">
+				for _, r := range report.Rows {
+					<tr>
+						<td class="px-3 py-2">{ r.AccountCode }</td>
+						<td class="px-3 py-2">{ r.AccountName }</td>
+						<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", r.Debit) }</td>
+						<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", r.Credit) }</td>
+					</tr>
+				}
+				<tr class="font-semibold bg-slate-50">
+					<td class="px-3 py-2" colspan="2">Total</td>
+					<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", report.TotalDebit) }</td>
+					<td class="px-3 py-2 text-right">{ fmt.Sprintf("%.2f", report.TotalCredit) }</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+}
+
+templ IncomeStatementReport(report *dto.IncomeStatementReport, from, to time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Income Statement", csrf, user, incomeStatementContent(report, from, to))
+}
+
+templ incomeStatementContent(report *dto.IncomeStatementReport, from, to time.Time) {
+	<div>
+		<h1 class="text-2xl font-bold">Income Statement</h1>
+		<a href="/reports/accounting/income-statement/export.pdf" class="mt-2 inline-block rounded-lg border px-3 py-1.5 text-sm">PDF</a>
+		if report != nil {
+			<p class="mt-4 text-sm">Net Profit: <strong>{ fmt.Sprintf("%.2f", report.NetProfit) }</strong></p>
+		}
+	</div>
+}
+
+templ BalanceSheetReport(report *dto.BalanceSheetReport, asOf time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Balance Sheet", csrf, user, balanceSheetContent(report))
+}
+
+templ balanceSheetContent(report *dto.BalanceSheetReport) {
+	<div>
+		<h1 class="text-2xl font-bold">Balance Sheet</h1>
+		if report != nil {
+			<p class="mt-4 text-sm">Total Assets: { fmt.Sprintf("%.2f", report.TotalAssets) } | Liabilities: { fmt.Sprintf("%.2f", report.TotalLiab) } | Equity: { fmt.Sprintf("%.2f", report.TotalEquity) }</p>
+		}
+	</div>
+}
+
+templ CashFlowReport(report *dto.CashFlowReport, from, to time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Cash Flow", csrf, user, cashFlowContent(report))
+}
+
+templ cashFlowContent(report *dto.CashFlowReport) {
+	<div>
+		<h1 class="text-2xl font-bold">Cash Flow</h1>
+		if report != nil {
+			<div class="mt-6 grid gap-4 sm:grid-cols-3">
+				@acctStatCard("Cash In", fmt.Sprintf("%.2f", report.OperatingIn))
+				@acctStatCard("Cash Out", fmt.Sprintf("%.2f", report.OperatingOut))
+				@acctStatCard("Net Flow", fmt.Sprintf("%.2f", report.NetCashFlow))
+			</div>
+		}
+	</div>
+}
+
+templ PeriodList(periods []dto.FinancialPeriodResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Financial Periods", csrf, user, periodListContent(periods, csrf))
+}
+
+templ periodListContent(periods []dto.FinancialPeriodResponse, csrf string) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Financial Periods</h1>
+			<a href="/accounting/periods/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">New Period</a>
+		</div>
+		<div class="mt-6 grid gap-3">
+			for _, p := range periods {
+				<div class="flex items-center justify-between rounded-xl border bg-white p-4">
+					<div>
+						<h2 class="font-semibold">{ p.Name }</h2>
+						<p class="text-sm text-slate-500">{ p.StartDate.Format("2006-01-02") } — { p.EndDate.Format("2006-01-02") }</p>
+						<span class="text-xs">{ p.Status }</span>
+						if p.IsLocked {
+							<span class="ml-2 text-xs text-red-600">Locked</span>
+						}
+					</div>
+					if p.Status == "open" {
+						<form method="POST" action={ templ.SafeURL("/accounting/periods/" + p.ID.String() + "/close") }>
+							@components.CSRFInput(csrf)
+							<button type="submit" class="rounded-lg border px-3 py-1 text-sm">Close Period</button>
+						</form>
+					}
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ PeriodForm(csrf string, user *dto.AuthUser) {
+	@layouts.Base("New Financial Period", csrf, user, periodFormContent(csrf))
+}
+
+templ periodFormContent(csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">New Financial Period</h1>
+		<form method="POST" action="/accounting/periods" class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input name="name" required placeholder="FY 2026" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="date" name="start_date" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="date" name="end_date" required class="w-full rounded-lg border px-3 py-2"/>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Create</button>
+		</form>
+	</div>
+}

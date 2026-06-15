@@ -1,0 +1,1 @@
+-- SQLC schema mirror for accounting (see migrations/013_accounting.sql)

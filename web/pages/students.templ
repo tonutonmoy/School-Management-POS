@@ -1,0 +1,514 @@
+package pages
+
+import (
+	"net/url"
+	"strconv"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+templ StudentList(data *dto.PaginatedStudents, filter dto.StudentSearchFilter, formData *StudentFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Students", csrf, user, studentListContent(data, filter, formData))
+}
+
+type StudentFormData struct {
+	Sessions    []dto.AcademicSessionResponse
+	Classes     []dto.ClassResponse
+	Sections    []dto.SectionResponse
+	Departments []dto.DepartmentResponse
+}
+
+templ studentListContent(data *dto.PaginatedStudents, filter dto.StudentSearchFilter, formData *StudentFormData) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Students</h1>
+			<a href="/students/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">New Admission</a>
+		</div>
+		<form method="GET" action="/students" class="mt-6 grid gap-3 rounded-xl border bg-white p-4 md:grid-cols-3 lg:grid-cols-6">
+			<input type="text" name="admission_number" value={ filter.AdmissionNumber } placeholder="Admission #" class="rounded-lg border px-3 py-2 text-sm"/>
+			<input type="text" name="roll_number" value={ filter.RollNumber } placeholder="Roll #" class="rounded-lg border px-3 py-2 text-sm"/>
+			<input type="text" name="name" value={ filter.Name } placeholder="Name" class="rounded-lg border px-3 py-2 text-sm"/>
+			<select name="class_id" class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">All classes</option>
+				for _, c := range formData.Classes {
+					<option value={ c.ID.String() } selected?={ filterClassSelected(filter, c.ID) }>{ c.Name }</option>
+				}
+			</select>
+			<select name="session_id" class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">All sessions</option>
+				for _, s := range formData.Sessions {
+					<option value={ s.ID.String() } selected?={ filterSessionSelected(filter, s.ID) }>{ s.Name }</option>
+				}
+			</select>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Search</button>
+		</form>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50">
+					<tr>
+						<th class="px-4 py-3 text-left">Admission #</th>
+						<th class="px-4 py-3 text-left">Name</th>
+						<th class="px-4 py-3 text-left">Class</th>
+						<th class="px-4 py-3 text-left">Section</th>
+						<th class="px-4 py-3 text-left">Status</th>
+						<th class="px-4 py-3 text-right">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y">
+					for _, s := range data.Items {
+						<tr>
+							<td class="px-4 py-3 font-mono text-xs">{ s.AdmissionNumber }</td>
+							<td class="px-4 py-3">{ s.FullName }</td>
+							<td class="px-4 py-3">{ s.ClassName }</td>
+							<td class="px-4 py-3">{ s.SectionName }</td>
+							<td class="px-4 py-3"><span class={ studentStatusClass(s.Status) }>{ s.Status }</span></td>
+							<td class="px-4 py-3 text-right">
+								<a href={ templ.SafeURL("/students/" + s.ID.String()) } class="text-indigo-600">View</a>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<div class="mt-3 flex flex-wrap items-center justify-between gap-2">
+			<p class="text-sm text-slate-500">{ strconv.FormatInt(data.Total, 10) } students found</p>
+			@components.Pagination(data.Page, data.TotalPages, "/students", studentListQuery(filter))
+		</div>
+	</div>
+}
+
+func studentListQuery(f dto.StudentSearchFilter) string {
+	v := url.Values{}
+	if f.AdmissionNumber != "" {
+		v.Set("admission_number", f.AdmissionNumber)
+	}
+	if f.RollNumber != "" {
+		v.Set("roll_number", f.RollNumber)
+	}
+	if f.Name != "" {
+		v.Set("name", f.Name)
+	}
+	if f.ClassID != nil {
+		v.Set("class_id", f.ClassID.String())
+	}
+	if f.SessionID != nil {
+		v.Set("session_id", f.SessionID.String())
+	}
+	return v.Encode()
+}
+
+func filterClassSelected(f dto.StudentSearchFilter, id uuid.UUID) bool {
+	return f.ClassID != nil && *f.ClassID == id
+}
+
+func filterSessionSelected(f dto.StudentSearchFilter, id uuid.UUID) bool {
+	return f.SessionID != nil && *f.SessionID == id
+}
+
+func studentStatusClass(status string) string {
+	switch status {
+	case "active":
+		return "rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-700"
+	case "graduated":
+		return "rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-700"
+	case "transferred":
+		return "rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-700"
+	default:
+		return "rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600"
+	}
+}
+
+templ StudentForm(title string, student *dto.StudentResponse, formData *StudentFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, studentFormContent(title, student, formData, csrf))
+}
+
+templ studentFormContent(title string, student *dto.StudentResponse, formData *StudentFormData, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ studentFormAction(student) } enctype="multipart/form-data" class="mt-6 space-y-6">
+			@components.CSRFInput(csrf)
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Personal Information</h2>
+				<div class="mt-4 grid gap-4 md:grid-cols-2">
+					<input type="text" name="first_name" required value={ sfFirst(student) } placeholder="First name" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="last_name" required value={ sfLast(student) } placeholder="Last name" class="rounded-lg border px-3 py-2"/>
+					<input type="date" name="date_of_birth" required value={ sfDOB(student) } class="rounded-lg border px-3 py-2"/>
+					<select name="gender" required class="rounded-lg border px-3 py-2">
+						<option value="male" selected?={ sfGender(student) == "male" }>Male</option>
+						<option value="female" selected?={ sfGender(student) == "female" }>Female</option>
+						<option value="other" selected?={ sfGender(student) == "other" }>Other</option>
+					</select>
+					<input type="text" name="blood_group" value={ sfBlood(student) } placeholder="Blood group" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="religion" value={ sfReligion(student) } placeholder="Religion" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="nationality" value={ sfNationality(student) } placeholder="Nationality" class="rounded-lg border px-3 py-2"/>
+					<input type="file" name="photo" accept="image/*" class="text-sm"/>
+					<input type="text" name="phone" value={ sfPhone(student) } placeholder="Phone" class="rounded-lg border px-3 py-2"/>
+					<input type="email" name="email" value={ sfEmail(student) } placeholder="Email" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="roll_number" value={ sfRoll(student) } placeholder="Roll number" class="rounded-lg border px-3 py-2"/>
+				</div>
+				<textarea name="address" placeholder="Address" class="mt-4 w-full rounded-lg border px-3 py-2">{ sfAddress(student) }</textarea>
+			</div>
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Parent Information</h2>
+				<div class="mt-4 grid gap-4 md:grid-cols-2">
+					<input type="text" name="father_name" value={ sfFatherName(student) } placeholder="Father name" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="father_phone" value={ sfFatherPhone(student) } placeholder="Father phone" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="father_occupation" value={ sfFatherOcc(student) } placeholder="Father occupation" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="mother_name" value={ sfMotherName(student) } placeholder="Mother name" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="mother_phone" value={ sfMotherPhone(student) } placeholder="Mother phone" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="mother_occupation" value={ sfMotherOcc(student) } placeholder="Mother occupation" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="guardian_name" value={ sfGuardianName(student) } placeholder="Guardian name" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="guardian_phone" value={ sfGuardianPhone(student) } placeholder="Guardian phone" class="rounded-lg border px-3 py-2"/>
+				</div>
+			</div>
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Academic Information</h2>
+				<div class="mt-4 grid gap-4 md:grid-cols-2">
+					<select name="session_id" required class="rounded-lg border px-3 py-2">
+						for _, s := range formData.Sessions {
+							<option value={ s.ID.String() } selected?={ sfSession(student, s.ID) }>{ s.Name }</option>
+						}
+					</select>
+					<select name="class_id" required class="rounded-lg border px-3 py-2" hx-get="/api/sections" hx-target="#section-select" hx-trigger="change" hx-include="[name='class_id']">
+						for _, c := range formData.Classes {
+							<option value={ c.ID.String() } selected?={ sfClass(student, c.ID) }>{ c.Name }</option>
+						}
+					</select>
+					<div id="section-select">
+						@studentSectionSelect(student, formData.Sections)
+					</div>
+					<select name="department_id" class="rounded-lg border px-3 py-2">
+						<option value="">No department</option>
+						for _, d := range formData.Departments {
+							<option value={ d.ID.String() } selected?={ sfDept(student, d.ID) }>{ d.Name }</option>
+						}
+					</select>
+					<input type="date" name="admission_date" required value={ sfAdmissionDate(student) } class="rounded-lg border px-3 py-2"/>
+					<select name="status" class="rounded-lg border px-3 py-2">
+						<option value="active" selected?={ sfStatus(student) == "active" }>Active</option>
+						<option value="inactive" selected?={ sfStatus(student) == "inactive" }>Inactive</option>
+						<option value="graduated" selected?={ sfStatus(student) == "graduated" }>Graduated</option>
+						<option value="transferred" selected?={ sfStatus(student) == "transferred" }>Transferred</option>
+					</select>
+				</div>
+			</div>
+			if student == nil {
+				<div class="rounded-xl border bg-white p-6">
+					<h2 class="font-semibold">Documents</h2>
+					<div class="mt-4 grid gap-4 md:grid-cols-2">
+						<label class="text-sm">Birth Certificate <input type="file" name="birth_certificate" class="mt-1 block w-full text-sm"/></label>
+						<label class="text-sm">Previous Marksheet <input type="file" name="previous_marksheet" class="mt-1 block w-full text-sm"/></label>
+						<label class="text-sm">Passport Photo <input type="file" name="passport_photo" class="mt-1 block w-full text-sm"/></label>
+						<label class="text-sm">Other <input type="file" name="other_document" class="mt-1 block w-full text-sm"/></label>
+					</div>
+				</div>
+			}
+			<button type="submit" class="rounded-lg bg-indigo-600 px-6 py-2.5 text-white">Save Student</button>
+		</form>
+	</div>
+}
+
+templ studentSectionSelect(student *dto.StudentResponse, sections []dto.SectionResponse) {
+	<select name="section_id" required class="w-full rounded-lg border px-3 py-2">
+		<option value="">Select section</option>
+		for _, sec := range sections {
+			<option value={ sec.ID.String() } selected?={ sfSection(student, sec.ID) }>{ sec.Name }</option>
+		}
+	</select>
+}
+
+func studentFormAction(s *dto.StudentResponse) string {
+	if s == nil { return "/students" }
+	return "/students/" + s.ID.String()
+}
+
+func sfFirst(s *dto.StudentResponse) string { if s == nil { return "" }; return s.FirstName }
+func sfLast(s *dto.StudentResponse) string { if s == nil { return "" }; return s.LastName }
+func sfDOB(s *dto.StudentResponse) string { if s == nil { return "" }; return s.DateOfBirth.Format("2006-01-02") }
+func sfGender(s *dto.StudentResponse) string { if s == nil { return "male" }; return s.Gender }
+func sfBlood(s *dto.StudentResponse) string { if s == nil { return "" }; return s.BloodGroup }
+func sfReligion(s *dto.StudentResponse) string { if s == nil { return "" }; return s.Religion }
+func sfNationality(s *dto.StudentResponse) string { if s == nil { return "Bangladeshi" }; return s.Nationality }
+func sfPhone(s *dto.StudentResponse) string { if s == nil { return "" }; return s.Phone }
+func sfEmail(s *dto.StudentResponse) string { if s == nil { return "" }; return s.Email }
+func sfRoll(s *dto.StudentResponse) string { if s == nil { return "" }; return s.RollNumber }
+func sfAddress(s *dto.StudentResponse) string { if s == nil { return "" }; return s.Address }
+func sfFatherName(s *dto.StudentResponse) string { if s == nil || s.Parents == nil { return "" }; return s.Parents.FatherName }
+func sfFatherPhone(s *dto.StudentResponse) string { if s == nil || s.Parents == nil { return "" }; return s.Parents.FatherPhone }
+func sfFatherOcc(s *dto.StudentResponse) string { if s == nil || s.Parents == nil { return "" }; return s.Parents.FatherOccupation }
+func sfMotherName(s *dto.StudentResponse) string { if s == nil || s.Parents == nil { return "" }; return s.Parents.MotherName }
+func sfMotherPhone(s *dto.StudentResponse) string { if s == nil || s.Parents == nil { return "" }; return s.Parents.MotherPhone }
+func sfMotherOcc(s *dto.StudentResponse) string { if s == nil || s.Parents == nil { return "" }; return s.Parents.MotherOccupation }
+func sfGuardianName(s *dto.StudentResponse) string { if s == nil || s.Parents == nil { return "" }; return s.Parents.GuardianName }
+func sfGuardianPhone(s *dto.StudentResponse) string { if s == nil || s.Parents == nil { return "" }; return s.Parents.GuardianPhone }
+func sfAdmissionDate(s *dto.StudentResponse) string {
+	if s == nil { return time.Now().Format("2006-01-02") }
+	return s.AdmissionDate.Format("2006-01-02")
+}
+func sfStatus(s *dto.StudentResponse) string { if s == nil { return "active" }; return s.Status }
+func sfSession(s *dto.StudentResponse, id uuid.UUID) bool { if s == nil { return false }; return s.SessionID == id }
+func sfClass(s *dto.StudentResponse, id uuid.UUID) bool { if s == nil { return false }; return s.ClassID == id }
+func sfSection(s *dto.StudentResponse, id uuid.UUID) bool { if s == nil { return false }; return s.SectionID == id }
+func sfDept(s *dto.StudentResponse, id uuid.UUID) bool { if s == nil || s.DepartmentID == nil { return false }; return *s.DepartmentID == id }
+
+templ StudentProfile(student *dto.StudentResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Student Profile", csrf, user, studentProfileContent(student, csrf))
+}
+
+templ studentProfileContent(student *dto.StudentResponse, csrf string) {
+	<div>
+		<div class="flex flex-wrap items-start justify-between gap-4">
+			<div class="flex items-center gap-4">
+				if student.PhotoURL != "" {
+					<img src={ student.PhotoURL } alt="Photo" class="h-20 w-20 rounded-full object-cover ring-2 ring-indigo-100"/>
+				} else {
+					<div class="flex h-20 w-20 items-center justify-center rounded-full bg-indigo-100 text-2xl font-bold text-indigo-600">{ studentInitials(student) }</div>
+				}
+				<div>
+					<h1 class="text-2xl font-bold">{ student.FullName }</h1>
+					<p class="text-slate-500">{ student.AdmissionNumber } · Roll { student.RollNumber }</p>
+					<span class={ studentStatusClass(student.Status) }>{ student.Status }</span>
+				</div>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				<a href={ templ.SafeURL("/students/" + student.ID.String() + "/edit") } class="rounded-lg border px-3 py-2 text-sm">Edit</a>
+				<a href={ templ.SafeURL("/students/" + student.ID.String() + "/promote") } class="rounded-lg border px-3 py-2 text-sm">Promote</a>
+				<a href={ templ.SafeURL("/students/" + student.ID.String() + "/transfer") } class="rounded-lg border px-3 py-2 text-sm">Transfer</a>
+				<a href={ templ.SafeURL("/students/" + student.ID.String() + "/id-card") } target="_blank" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">ID Card</a>
+			</div>
+		</div>
+		<div class="mt-6 grid gap-6 lg:grid-cols-2">
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Personal</h2>
+				<dl class="mt-3 space-y-1 text-sm">
+					<div><dt class="inline font-medium">DOB:</dt> <dd class="inline">{ student.DateOfBirth.Format("Jan 02, 2006") }</dd></div>
+					<div><dt class="inline font-medium">Gender:</dt> <dd class="inline">{ student.Gender }</dd></div>
+					<div><dt class="inline font-medium">Blood:</dt> <dd class="inline">{ student.BloodGroup }</dd></div>
+					<div><dt class="inline font-medium">Phone:</dt> <dd class="inline">{ student.Phone }</dd></div>
+					<div><dt class="inline font-medium">Address:</dt> <dd class="inline">{ student.Address }</dd></div>
+				</dl>
+			</div>
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Academic</h2>
+				<dl class="mt-3 space-y-1 text-sm">
+					<div><dt class="inline font-medium">Session:</dt> <dd class="inline">{ student.SessionName }</dd></div>
+					<div><dt class="inline font-medium">Class:</dt> <dd class="inline">{ student.ClassName }</dd></div>
+					<div><dt class="inline font-medium">Section:</dt> <dd class="inline">{ student.SectionName }</dd></div>
+					<div><dt class="inline font-medium">Department:</dt> <dd class="inline">{ student.DepartmentName }</dd></div>
+					<div><dt class="inline font-medium">Admitted:</dt> <dd class="inline">{ student.AdmissionDate.Format("Jan 02, 2006") }</dd></div>
+				</dl>
+			</div>
+			if student.Parents != nil {
+				<div class="rounded-xl border bg-white p-6">
+					<h2 class="font-semibold">Parents</h2>
+					<dl class="mt-3 space-y-1 text-sm">
+						<div><dt class="inline font-medium">Father:</dt> <dd class="inline">{ student.Parents.FatherName } ({ student.Parents.FatherPhone })</dd></div>
+						<div><dt class="inline font-medium">Mother:</dt> <dd class="inline">{ student.Parents.MotherName } ({ student.Parents.MotherPhone })</dd></div>
+						<div><dt class="inline font-medium">Guardian:</dt> <dd class="inline">{ student.Parents.GuardianName } ({ student.Parents.GuardianPhone })</dd></div>
+					</dl>
+				</div>
+			}
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Documents</h2>
+				<ul class="mt-3 space-y-2 text-sm">
+					for _, d := range student.Documents {
+						<li><a href={ d.FileURL } target="_blank" class="text-indigo-600">{ d.DocType }: { d.FileName }</a></li>
+					}
+					if len(student.Documents) == 0 {
+						<li class="text-slate-500">No documents uploaded.</li>
+					}
+				</ul>
+				<form method="POST" action={ templ.SafeURL("/students/" + student.ID.String() + "/documents") } enctype="multipart/form-data" class="mt-4 flex gap-2">
+					@components.CSRFInput(csrf)
+					<select name="doc_type" class="rounded border px-2 py-1 text-sm">
+						<option value="birth_certificate">Birth Certificate</option>
+						<option value="previous_marksheet">Marksheet</option>
+						<option value="passport_photo">Passport Photo</option>
+						<option value="other">Other</option>
+					</select>
+					<input type="file" name="document" required class="text-sm"/>
+					<button type="submit" class="rounded bg-indigo-600 px-3 py-1 text-sm text-white">Upload</button>
+				</form>
+			</div>
+		</div>
+	</div>
+}
+
+func studentInitials(s *dto.StudentResponse) string {
+	if s == nil { return "?" }
+	if len(s.FirstName) > 0 && len(s.LastName) > 0 {
+		return string([]rune(s.FirstName)[0]) + string([]rune(s.LastName)[0])
+	}
+	return "?"
+}
+
+templ StudentPromote(student *dto.StudentResponse, formData *StudentFormData, action, csrf string, user *dto.AuthUser) {
+	@layouts.Base(capitalize(action)+" Student", csrf, user, studentPromoteContent(student, formData, action, csrf))
+}
+
+templ studentPromoteContent(student *dto.StudentResponse, formData *StudentFormData, action, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">{ capitalize(action) } { student.FullName }</h1>
+		<p class="text-sm text-slate-500">Current: { student.ClassName } - { student.SectionName } ({ student.SessionName })</p>
+		<form method="POST" action={ templ.SafeURL("/students/" + student.ID.String() + "/" + action) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<select name="to_session_id" required class="w-full rounded-lg border px-3 py-2">
+				for _, s := range formData.Sessions {
+					<option value={ s.ID.String() }>{ s.Name }</option>
+				}
+			</select>
+			<select name="to_class_id" required class="w-full rounded-lg border px-3 py-2" hx-get="/api/sections?field=to_section_id" hx-target="#to-section" hx-trigger="change" hx-include="[name='to_class_id']">
+				for _, c := range formData.Classes {
+					<option value={ c.ID.String() }>{ c.Name }</option>
+				}
+			</select>
+			<div id="to-section">
+				<select name="to_section_id" required class="w-full rounded-lg border px-3 py-2"><option value="">Select section</option></select>
+			</div>
+			<textarea name="notes" placeholder="Notes" class="w-full rounded-lg border px-3 py-2"></textarea>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">{ capitalize(action) }</button>
+		</form>
+	</div>
+}
+
+func capitalize(s string) string {
+	if s == "" { return "" }
+	return string([]rune(s)[0]-32) + s[1:]
+}
+
+templ StudentIDCard(data *dto.StudentIDCardData, csrf string, user *dto.AuthUser) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<title>ID Card - { data.Student.FullName }</title>
+			<link href="/static/css/app.css" rel="stylesheet"/>
+			<style>
+				@media print { .no-print { display: none; } }
+			</style>
+		</head>
+		<body class="bg-slate-100 p-8">
+			<button onclick="window.print()" class="no-print mb-4 rounded-lg bg-indigo-600 px-4 py-2 text-white">Print</button>
+			<div class="mx-auto w-80 overflow-hidden rounded-2xl border-2 border-indigo-600 bg-white shadow-xl">
+				<div class="bg-indigo-600 px-4 py-3 text-center text-white">
+					if data.SchoolLogo != "" {
+						<img src={ data.SchoolLogo } class="mx-auto mb-2 h-10 object-contain"/>
+					}
+					<p class="text-sm font-bold">{ data.SchoolName }</p>
+					<p class="text-xs opacity-80">Student ID Card</p>
+				</div>
+				<div class="p-4 text-center">
+					if data.Student.PhotoURL != "" {
+						<img src={ data.Student.PhotoURL } class="mx-auto h-24 w-24 rounded-lg object-cover"/>
+					} else {
+						<div class="mx-auto flex h-24 w-24 items-center justify-center rounded-lg bg-slate-200 text-2xl font-bold">{ studentInitials(&data.Student) }</div>
+					}
+					<h2 class="mt-3 text-lg font-bold">{ data.Student.FullName }</h2>
+					<p class="text-sm text-slate-600">{ data.Student.ClassName } - { data.Student.SectionName }</p>
+					<p class="mt-2 font-mono text-xs">{ data.Student.AdmissionNumber }</p>
+					<p class="text-xs text-slate-500">Roll: { data.Student.RollNumber }</p>
+				</div>
+				<div class="border-t px-4 py-2 text-center text-xs text-slate-400">
+					Issued: { data.IssueDate.Format("Jan 02, 2006") }
+				</div>
+			</div>
+		</body>
+	</html>
+}
+
+templ StudentReport(title string, students []dto.StudentResponse, filter dto.ReportFilter, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, studentReportContent(title, students))
+}
+
+templ studentReportContent(title string, students []dto.StudentResponse) {
+	<div>
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<p class="text-sm text-slate-500">{ strconv.Itoa(len(students)) } records</p>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50">
+					<tr>
+						<th class="px-4 py-3 text-left">Admission #</th>
+						<th class="px-4 py-3 text-left">Name</th>
+						<th class="px-4 py-3 text-left">Class</th>
+						<th class="px-4 py-3 text-left">Section</th>
+						<th class="px-4 py-3 text-left">Status</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y">
+					for _, s := range students {
+						<tr>
+							<td class="px-4 py-3">{ s.AdmissionNumber }</td>
+							<td class="px-4 py-3">{ s.FullName }</td>
+							<td class="px-4 py-3">{ s.ClassName }</td>
+							<td class="px-4 py-3">{ s.SectionName }</td>
+							<td class="px-4 py-3">{ s.Status }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+type ClassStudentGroup struct {
+	ClassName string
+	Students  []dto.StudentResponse
+}
+
+templ ClassWiseReport(groups []ClassStudentGroup, filter dto.ReportFilter, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Class Wise Report", csrf, user, classWiseContent(groups))
+}
+
+templ classWiseContent(groups []ClassStudentGroup) {
+	<div>
+		<h1 class="text-2xl font-bold">Class Wise Student Report</h1>
+		for _, g := range groups {
+			<div class="mt-6 rounded-xl border bg-white p-4">
+				<h2 class="font-semibold">{ g.ClassName } ({ strconv.Itoa(len(g.Students)) } students)</h2>
+				<ul class="mt-2 space-y-1 text-sm">
+					for _, s := range g.Students {
+						<li>{ s.FullName } - { s.SectionName } ({ s.AdmissionNumber })</li>
+					}
+				</ul>
+			</div>
+		}
+	</div>
+}
+
+templ AdmissionReport(students []dto.StudentResponse, from, to time.Time, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Admission Report", csrf, user, admissionReportContent(students, from, to))
+}
+
+templ admissionReportContent(students []dto.StudentResponse, from, to time.Time) {
+	<div>
+		<h1 class="text-2xl font-bold">Admission Report</h1>
+		<p class="text-sm text-slate-500">{ from.Format("Jan 02, 2006") } – { to.Format("Jan 02, 2006") } · { strconv.Itoa(len(students)) } admissions</p>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50">
+					<tr>
+						<th class="px-4 py-3 text-left">Date</th>
+						<th class="px-4 py-3 text-left">Admission #</th>
+						<th class="px-4 py-3 text-left">Name</th>
+						<th class="px-4 py-3 text-left">Class</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y">
+					for _, s := range students {
+						<tr>
+							<td class="px-4 py-3">{ s.AdmissionDate.Format("2006-01-02") }</td>
+							<td class="px-4 py-3">{ s.AdmissionNumber }</td>
+							<td class="px-4 py-3">{ s.FullName }</td>
+							<td class="px-4 py-3">{ s.ClassName }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}

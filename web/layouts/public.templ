@@ -1,0 +1,104 @@
+package layouts
+
+import (
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+)
+
+templ PublicLayout(title, metaDesc, csrf string, settings *dto.WebsiteSettingsResponse, content templ.Component) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title }</title>
+			if metaDesc != "" {
+				<meta name="description" content={ metaDesc }/>
+			}
+			if settings != nil && settings.DefaultMetaTitle != "" {
+				<meta property="og:title" content={ settings.DefaultMetaTitle }/>
+			}
+			<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+			<link href="/static/css/app.css" rel="stylesheet"/>
+			if settings != nil && settings.PrimaryColor != "" {
+				<style>
+					:root { --primary: { settings.PrimaryColor }; }
+				</style>
+			}
+		</head>
+		<body class="min-h-screen bg-white text-slate-900">
+			<header class="border-b border-slate-200 bg-white shadow-sm">
+				<div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
+					<a href="/site" class="flex items-center gap-3">
+						if settings != nil && settings.LogoURL != "" {
+							<img src={ settings.LogoURL } alt="Logo" class="h-10 w-auto"/>
+						}
+						<span class="text-xl font-bold text-indigo-700">
+							if settings != nil {
+								{ settings.SiteName }
+							} else {
+								School
+							}
+						</span>
+					</a>
+					<nav class="hidden gap-4 md:flex text-sm font-medium">
+						<a href="/site" class="hover:text-indigo-600">Home</a>
+						<a href="/site/page/about" class="hover:text-indigo-600">About</a>
+						<a href="/site/page/principal-message" class="hover:text-indigo-600">Principal</a>
+						<a href="/admission/apply" class="hover:text-indigo-600">Apply</a>
+						<a href="/site/news" class="hover:text-indigo-600">News</a>
+						<a href="/site/events" class="hover:text-indigo-600">Events</a>
+						<a href="/site/downloads" class="hover:text-indigo-600">Downloads</a>
+						<a href="/site/contact" class="hover:text-indigo-600">Contact</a>
+						<a href="/login" class="text-slate-500 hover:text-indigo-600">Staff Login</a>
+					</nav>
+				</div>
+			</header>
+			<main>
+				@content
+			</main>
+			<footer class="mt-12 border-t bg-slate-900 py-8 text-slate-300">
+				<div class="mx-auto max-w-7xl px-4 text-sm">
+					if settings != nil {
+						<p>{ settings.SiteName } — { settings.Tagline }</p>
+						<p class="mt-2">{ settings.ContactAddress }</p>
+						<p>{ settings.ContactPhone } · { settings.ContactEmail }</p>
+					}
+				</div>
+			</footer>
+		</body>
+	</html>
+}
+
+templ PublicAuthLayout(title, csrf string, content templ.Component) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title }</title>
+			<link href="/static/css/app.css" rel="stylesheet"/>
+		</head>
+		<body class="min-h-screen bg-gradient-to-br from-indigo-50 to-slate-100">
+			<div class="mx-auto max-w-3xl px-4 py-10">
+				<div class="mb-6 text-center">
+					<a href="/site" class="text-sm text-indigo-600 hover:underline">← Back to website</a>
+				</div>
+				@content
+			</div>
+		</body>
+	</html>
+}
+
+templ PublicCard(title string, content templ.Component) {
+	<div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-lg sm:p-8">
+		<h1 class="mb-6 text-2xl font-bold text-slate-900">{ title }</h1>
+		@content
+	</div>
+}
+
+templ PublicFlash(flash, flashType string) {
+	if flash != "" {
+		@components.Flash(flash, flashType)
+	}
+}

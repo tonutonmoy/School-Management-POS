@@ -1,0 +1,248 @@
+package pages
+
+import (
+	"strconv"
+
+	"github.com/google/uuid"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+templ ClassList(classes []dto.ClassResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Classes", csrf, user, classListContent(classes))
+}
+
+templ classListContent(classes []dto.ClassResponse) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Classes</h1>
+			<a href="/classes/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create Class</a>
+		</div>
+		<div class="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+			for _, c := range classes {
+				<div class="rounded-xl border bg-white p-5 shadow-sm">
+					<h2 class="font-semibold">{ c.Name }</h2>
+					<p class="text-sm text-slate-500">Code: { c.Code }</p>
+					<p class="mt-2 text-sm text-slate-600">{ c.Description }</p>
+					<a href={ templ.SafeURL("/classes/" + c.ID.String() + "/edit") } class="mt-4 inline-block text-sm text-indigo-600">Edit</a>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ ClassForm(title string, class *dto.ClassResponse, subjects, assigned []dto.SubjectResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, classFormContent(title, class, subjects, assigned, csrf))
+}
+
+templ classFormContent(title string, class *dto.ClassResponse, subjects, assigned []dto.SubjectResponse, csrf string) {
+	<div class="max-w-2xl">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ classFormAction(class) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input type="text" name="name" required value={ classFieldName(class) } placeholder="Class name" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="code" required value={ classFieldCode(class) } placeholder="Code e.g. CLS-10" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="number" name="sort_order" value={ classFieldSort(class) } placeholder="Sort order" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="description" placeholder="Description" class="w-full rounded-lg border px-3 py-2">{ classFieldDesc(class) }</textarea>
+			<div>
+				<p class="mb-2 text-sm font-medium">Assign Subjects</p>
+				<div class="grid gap-2 sm:grid-cols-2">
+					for _, s := range subjects {
+						<label class="flex items-center gap-2 rounded border px-3 py-2 text-sm">
+							<input type="checkbox" name="permission_ids" value={ s.ID.String() } checked?={ subjectAssigned(assigned, s.ID) }/>
+							<span>{ s.Name } ({ s.Code })</span>
+						</label>
+					}
+				</div>
+			</div>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func classFormAction(c *dto.ClassResponse) string {
+	if c == nil {
+		return "/classes"
+	}
+	return "/classes/" + c.ID.String()
+}
+
+func classFieldName(c *dto.ClassResponse) string {
+	if c == nil { return "" }
+	return c.Name
+}
+
+func classFieldCode(c *dto.ClassResponse) string {
+	if c == nil { return "" }
+	return c.Code
+}
+
+func classFieldSort(c *dto.ClassResponse) string {
+	if c == nil { return "0" }
+	return strconv.Itoa(c.SortOrder)
+}
+
+func classFieldDesc(c *dto.ClassResponse) string {
+	if c == nil { return "" }
+	return c.Description
+}
+
+func subjectAssigned(assigned []dto.SubjectResponse, id uuid.UUID) bool {
+	for _, s := range assigned {
+		if s.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+templ SectionList(sections []dto.SectionResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Sections", csrf, user, sectionListContent(sections))
+}
+
+templ sectionListContent(sections []dto.SectionResponse) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Sections</h1>
+			<a href="/sections/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create Section</a>
+		</div>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50">
+					<tr>
+						<th class="px-4 py-3 text-left">Class</th>
+						<th class="px-4 py-3 text-left">Section</th>
+						<th class="px-4 py-3 text-left">Capacity</th>
+						<th class="px-4 py-3 text-right">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y">
+					for _, s := range sections {
+						<tr>
+							<td class="px-4 py-3">{ s.ClassName }</td>
+							<td class="px-4 py-3">{ s.Name }</td>
+							<td class="px-4 py-3">{ strconv.Itoa(s.Capacity) }</td>
+							<td class="px-4 py-3 text-right">
+								<a href={ templ.SafeURL("/sections/" + s.ID.String() + "/edit") } class="text-indigo-600">Edit</a>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ SectionForm(title string, section *dto.SectionResponse, classes []dto.ClassResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, sectionFormContent(title, section, classes, csrf))
+}
+
+templ sectionFormContent(title string, section *dto.SectionResponse, classes []dto.ClassResponse, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ sectionFormAction(section) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<select name="class_id" required class="w-full rounded-lg border px-3 py-2">
+				for _, c := range classes {
+					<option value={ c.ID.String() } selected?={ sectionClassSelected(section, c.ID) }>{ c.Name }</option>
+				}
+			</select>
+			<input type="text" name="name" required value={ sectionFieldName(section) } placeholder="Section name" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="number" name="capacity" value={ sectionFieldCapacity(section) } placeholder="Capacity" class="w-full rounded-lg border px-3 py-2"/>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func sectionFormAction(s *dto.SectionResponse) string {
+	if s == nil { return "/sections" }
+	return "/sections/" + s.ID.String()
+}
+
+func sectionFieldName(s *dto.SectionResponse) string {
+	if s == nil { return "" }
+	return s.Name
+}
+
+func sectionFieldCapacity(s *dto.SectionResponse) string {
+	if s == nil || s.Capacity == 0 { return "" }
+	return strconv.Itoa(s.Capacity)
+}
+
+func sectionClassSelected(s *dto.SectionResponse, classID uuid.UUID) bool {
+	if s == nil { return false }
+	return s.ClassID == classID
+}
+
+templ SubjectList(subjects []dto.SubjectResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Subjects", csrf, user, subjectListContent(subjects))
+}
+
+templ subjectListContent(subjects []dto.SubjectResponse) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Subjects</h1>
+			<a href="/subjects/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create Subject</a>
+		</div>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50">
+					<tr>
+						<th class="px-4 py-3 text-left">Name</th>
+						<th class="px-4 py-3 text-left">Code</th>
+						<th class="px-4 py-3 text-right">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y">
+					for _, s := range subjects {
+						<tr>
+							<td class="px-4 py-3">{ s.Name }</td>
+							<td class="px-4 py-3">{ s.Code }</td>
+							<td class="px-4 py-3 text-right">
+								<a href={ templ.SafeURL("/subjects/" + s.ID.String() + "/edit") } class="text-indigo-600">Edit</a>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ SubjectForm(title string, subject *dto.SubjectResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, subjectFormContent(title, subject, csrf))
+}
+
+templ subjectFormContent(title string, subject *dto.SubjectResponse, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ subjectFormAction(subject) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input type="text" name="name" required value={ subjectFieldName(subject) } placeholder="Subject name" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="code" required value={ subjectFieldCode(subject) } placeholder="Code" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="description" class="w-full rounded-lg border px-3 py-2">{ subjectFieldDesc(subject) }</textarea>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func subjectFormAction(s *dto.SubjectResponse) string {
+	if s == nil { return "/subjects" }
+	return "/subjects/" + s.ID.String()
+}
+
+func subjectFieldName(s *dto.SubjectResponse) string {
+	if s == nil { return "" }
+	return s.Name
+}
+
+func subjectFieldCode(s *dto.SubjectResponse) string {
+	if s == nil { return "" }
+	return s.Code
+}
+
+func subjectFieldDesc(s *dto.SubjectResponse) string {
+	if s == nil { return "" }
+	return s.Description
+}

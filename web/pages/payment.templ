@@ -1,0 +1,301 @@
+package pages
+
+import (
+	"fmt"
+	"net/url"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+templ PaymentDashboard(stats *dto.PaymentDashboardStats, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Payment Dashboard", csrf, user, paymentDashboardContent(stats))
+}
+
+templ paymentDashboardContent(stats *dto.PaymentDashboardStats) {
+	<div class="space-y-6">
+		<div class="flex flex-wrap items-center justify-between gap-4">
+			<h1 class="text-2xl font-bold">Online Payments</h1>
+			<div class="flex gap-2 text-sm">
+				<a href="/payments/gateways" class="rounded-lg border px-3 py-1.5 hover:bg-slate-50">Gateways</a>
+				<a href="/payments/transactions" class="rounded-lg border px-3 py-1.5 hover:bg-slate-50">Transactions</a>
+				<a href="/payments/reports" class="rounded-lg border px-3 py-1.5 hover:bg-slate-50">Reports</a>
+				<a href="/payments/refunds" class="rounded-lg border px-3 py-1.5 hover:bg-slate-50">Refunds</a>
+			</div>
+		</div>
+		if stats != nil {
+			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				@components.StatCard("Today Collection", fmt.Sprintf("৳%.2f", stats.TodayCollection), "emerald")
+				@components.StatCard("Gateway Collection", fmt.Sprintf("৳%.2f", stats.GatewayCollection), "indigo")
+				@components.StatCard("Failed Payments", fmt.Sprintf("%d", stats.FailedPayments), "red")
+				@components.StatCard("Pending Payments", fmt.Sprintf("%d", stats.PendingPayments), "amber")
+			</div>
+		}
+	</div>
+}
+
+templ PaymentGateways(gateways []dto.PaymentGatewayResponse, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Payment Gateways", csrf, user, paymentGatewaysContent(gateways, flash, flashType, csrf))
+}
+
+templ paymentGatewaysContent(gateways []dto.PaymentGatewayResponse, flash, flashType, csrf string) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Payment Gateways</h1>
+		@components.Flash(flash, flashType)
+		for _, g := range gateways {
+			<form method="POST" action={ templ.SafeURL("/payments/gateways/" + g.ID.String()) } class="rounded-xl border bg-white p-6 shadow-sm space-y-4">
+				@components.CSRFInput(csrf)
+				<div class="flex items-center justify-between">
+					<h2 class="text-lg font-semibold capitalize">{ g.Name } ({ g.Slug })</h2>
+					<span class="text-xs rounded-full px-2 py-1" class={ gatewayModeClass(g.IsSandbox) }>
+						if g.IsSandbox {
+							Sandbox
+						} else {
+							Production
+						}
+					</span>
+				</div>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<input type="text" name="name" value={ g.Name } class="rounded-lg border px-3 py-2"/>
+					<input type="hidden" name="slug" value={ g.Slug }/>
+					<input type="text" name="merchant_id" value={ g.MerchantID } placeholder="Merchant ID" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="store_id" value={ g.StoreID } placeholder="Store ID" class="rounded-lg border px-3 py-2"/>
+					<input type="password" name="api_key" placeholder="API Key" class="rounded-lg border px-3 py-2"/>
+					<input type="password" name="api_secret" placeholder="API Secret" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="callback_url" value={ g.CallbackURL } placeholder="Callback URL" class="rounded-lg border px-3 py-2 sm:col-span-2"/>
+					<input type="text" name="success_url" value={ g.SuccessURL } placeholder="Success URL" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="fail_url" value={ g.FailURL } placeholder="Fail URL" class="rounded-lg border px-3 py-2"/>
+				</div>
+				<div class="flex flex-wrap gap-4 text-sm">
+					<label class="flex items-center gap-2"><input type="checkbox" name="is_active" checked?={ g.IsActive }/> Active</label>
+					<label class="flex items-center gap-2"><input type="checkbox" name="is_sandbox" checked?={ g.IsSandbox }/> Sandbox Mode</label>
+				</div>
+				<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save Gateway</button>
+			</form>
+		}
+	</div>
+}
+
+func gatewayModeClass(sandbox bool) string {
+	if sandbox {
+		return "bg-amber-100 text-amber-800"
+	}
+	return "bg-emerald-100 text-emerald-800"
+}
+
+templ PaymentTransactions(data *dto.PaginatedGatewayTransactions, filter dto.PaymentReportFilter, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Payment Transactions", csrf, user, paymentTransactionsContent(data, filter))
+}
+
+templ paymentTransactionsContent(data *dto.PaginatedGatewayTransactions, filter dto.PaymentReportFilter) {
+	<div class="space-y-4">
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Payment Transactions</h1>
+			<a href="/payments/transactions/export.csv" class="text-sm text-indigo-600">Export CSV</a>
+		</div>
+		<form method="GET" class="flex flex-wrap gap-2 text-sm">
+			<input type="text" name="q" value={ filter.Query } placeholder="Search ref..." class="rounded-lg border px-3 py-2"/>
+			<select name="status" class="rounded-lg border px-3 py-2">
+				<option value="">All Status</option>
+				<option value="completed" selected?={ filter.Status == "completed" }>Completed</option>
+				<option value="pending" selected?={ filter.Status == "pending" }>Pending</option>
+				<option value="failed" selected?={ filter.Status == "failed" }>Failed</option>
+			</select>
+			<select name="gateway" class="rounded-lg border px-3 py-2">
+				<option value="">All Gateways</option>
+				<option value="bkash" selected?={ filter.GatewaySlug == "bkash" }>bKash</option>
+				<option value="nagad" selected?={ filter.GatewaySlug == "nagad" }>Nagad</option>
+				<option value="sslcommerz" selected?={ filter.GatewaySlug == "sslcommerz" }>SSLCommerz</option>
+			</select>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-white">Filter</button>
+		</form>
+		<div class="overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50 text-left"><tr>
+					<th class="px-4 py-2">Ref</th><th class="px-4 py-2">Gateway</th><th class="px-4 py-2">Student</th>
+					<th class="px-4 py-2">Amount</th><th class="px-4 py-2">Status</th><th class="px-4 py-2">Date</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					if data != nil {
+						for _, t := range data.Items {
+							<tr>
+								<td class="px-4 py-2 font-mono text-xs">{ t.TransactionRef }</td>
+								<td class="px-4 py-2 capitalize">{ t.GatewayName }</td>
+								<td class="px-4 py-2">{ t.StudentName }</td>
+								<td class="px-4 py-2">৳{ fmt.Sprintf("%.2f", t.Amount) }</td>
+								<td class="px-4 py-2 capitalize">{ t.Status }</td>
+								<td class="px-4 py-2">{ t.CreatedAt.Format("2006-01-02 15:04") }</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+		if data != nil {
+			@components.Pagination(data.Page, data.TotalPages, "/payments/transactions", paymentTransactionsQuery(filter))
+		}
+	</div>
+}
+
+func paymentTransactionsQuery(f dto.PaymentReportFilter) string {
+	v := url.Values{}
+	if f.Query != "" {
+		v.Set("q", f.Query)
+	}
+	if f.Status != "" {
+		v.Set("status", f.Status)
+	}
+	if f.GatewaySlug != "" {
+		v.Set("gateway", f.GatewaySlug)
+	}
+	return v.Encode()
+}
+
+templ PaymentReports(report []dto.GatewayCollectionReport, failed *dto.PaginatedGatewayTransactions, from, to, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Payment Reports", csrf, user, paymentReportsContent(report, failed, from, to))
+}
+
+templ paymentReportsContent(report []dto.GatewayCollectionReport, failed *dto.PaginatedGatewayTransactions, from, to string) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Payment Reports</h1>
+		<form method="GET" class="flex gap-2 text-sm">
+			<input type="date" name="from" value={ from } class="rounded-lg border px-3 py-2"/>
+			<input type="date" name="to" value={ to } class="rounded-lg border px-3 py-2"/>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Apply</button>
+		</form>
+		<div class="rounded-xl border bg-white">
+			<h2 class="border-b px-4 py-3 font-semibold">Gateway-wise Collection</h2>
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr><th class="px-4 py-2 text-left">Gateway</th><th class="px-4 py-2 text-right">Count</th><th class="px-4 py-2 text-right">Total</th></tr></thead>
+				<tbody class="divide-y">
+					for _, r := range report {
+						<tr>
+							<td class="px-4 py-2">{ r.GatewayName }</td>
+							<td class="px-4 py-2 text-right">{ fmt.Sprintf("%d", r.Count) }</td>
+							<td class="px-4 py-2 text-right">৳{ fmt.Sprintf("%.2f", r.TotalAmount) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<div class="rounded-xl border bg-white">
+			<h2 class="border-b px-4 py-3 font-semibold">Recent Failed Transactions</h2>
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr><th class="px-4 py-2 text-left">Ref</th><th class="px-4 py-2 text-left">Error</th><th class="px-4 py-2 text-right">Amount</th></tr></thead>
+				<tbody class="divide-y">
+					if failed != nil {
+						for _, t := range failed.Items {
+							<tr>
+								<td class="px-4 py-2 font-mono text-xs">{ t.TransactionRef }</td>
+								<td class="px-4 py-2 text-red-600">{ t.ErrorMessage }</td>
+								<td class="px-4 py-2 text-right">৳{ fmt.Sprintf("%.2f", t.Amount) }</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ PaymentRefunds(data *dto.PaginatedRefunds, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Payment Refunds", csrf, user, paymentRefundsContent(data, flash, flashType, csrf))
+}
+
+templ paymentRefundsContent(data *dto.PaginatedRefunds, flash, flashType, csrf string) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Refund Management</h1>
+		@components.Flash(flash, flashType)
+		<form method="POST" action="/payments/refunds" class="rounded-xl border bg-white p-4 space-y-3 max-w-lg">
+			@components.CSRFInput(csrf)
+			<h2 class="font-semibold">Request Refund</h2>
+			<input type="text" name="payment_id" placeholder="Payment UUID" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="number" step="0.01" name="amount" placeholder="Amount" required class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="reason" placeholder="Reason" required rows="2" class="w-full rounded-lg border px-3 py-2"></textarea>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Submit Request</button>
+		</form>
+		<div class="overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-2 text-left">Payment</th><th class="px-4 py-2 text-right">Amount</th>
+					<th class="px-4 py-2 text-left">Status</th><th class="px-4 py-2"></th>
+				</tr></thead>
+				<tbody class="divide-y">
+					if data != nil {
+						for _, r := range data.Items {
+							<tr>
+								<td class="px-4 py-2">{ r.PaymentID.String() }</td>
+								<td class="px-4 py-2 text-right">৳{ fmt.Sprintf("%.2f", r.Amount) }</td>
+								<td class="px-4 py-2 capitalize">{ r.Status }</td>
+								<td class="px-4 py-2 text-right space-x-2">
+									if r.Status == "requested" {
+										<form method="POST" action={ templ.SafeURL("/payments/refunds/" + r.ID.String() + "/approve") } class="inline">
+											@components.CSRFInput(csrf)
+											<button type="submit" class="text-emerald-600 hover:underline">Approve</button>
+										</form>
+										<form method="POST" action={ templ.SafeURL("/payments/refunds/" + r.ID.String() + "/reject") } class="inline">
+											@components.CSRFInput(csrf)
+											<button type="submit" class="text-red-600 hover:underline">Reject</button>
+										</form>
+									}
+								</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ PaymentResult(success bool, ref string) {
+	@layouts.PublicAuthLayout("Payment Result", "", paymentResultContent(success, ref))
+}
+
+templ paymentResultContent(success bool, ref string) {
+	@layouts.PublicCard("Payment Result", paymentResultInner(success, ref))
+}
+
+templ paymentResultInner(success bool, ref string) {
+	<div class="space-y-4 text-center">
+		if success {
+			<p class="text-lg font-semibold text-emerald-700">Payment Successful</p>
+			if ref != "" {
+				<p class="text-sm text-slate-600">Reference: { ref }</p>
+			}
+			<p class="text-sm text-slate-500">Your receipt will be available shortly.</p>
+		} else {
+			<p class="text-lg font-semibold text-red-700">Payment Failed</p>
+			if ref != "" {
+				<p class="text-sm text-slate-600">Reference: { ref }</p>
+			}
+			<p class="text-sm text-slate-500">Please try again or contact the school office.</p>
+		}
+		<a href="/login" class="inline-block rounded-lg bg-indigo-600 px-6 py-2 text-white">Go to Login</a>
+	</div>
+}
+
+templ ParentPayNow(data *dto.ParentPayNowData, csrf string, user *dto.AuthUser) {
+	@layouts.ParentLayout("Pay Fees", csrf, user, parentPayNowContent(data, csrf))
+}
+
+templ parentPayNowContent(data *dto.ParentPayNowData, csrf string) {
+	<div class="space-y-6 max-w-lg">
+		<h1 class="text-2xl font-bold">Pay Fees — { data.StudentName }</h1>
+		@components.StatCard("Amount Due", fmt.Sprintf("৳%.2f", data.CurrentDue), "amber")
+		<form method="POST" action={ templ.SafeURL("/parent/students/" + data.StudentID.String() + "/pay") } class="rounded-xl border bg-white p-6 space-y-4">
+			@components.CSRFInput(csrf)
+			<label class="block text-sm font-medium">Payment Amount</label>
+			<input type="number" step="0.01" name="amount" value={ fmt.Sprintf("%.2f", data.CurrentDue) } min="1" class="w-full rounded-lg border px-3 py-2"/>
+			<p class="text-xs text-slate-500">Leave full amount for complete payment, or enter a partial amount.</p>
+			<label class="block text-sm font-medium">Payment Gateway</label>
+			<select name="gateway" required class="w-full rounded-lg border px-3 py-2">
+				for _, g := range data.Gateways {
+					<option value={ g.Slug }>{ g.Name }</option>
+				}
+			</select>
+			<button type="submit" class="w-full rounded-lg bg-emerald-600 py-2.5 font-semibold text-white">Pay Now</button>
+		</form>
+		<a href={ templ.SafeURL("/parent/students/" + data.StudentID.String() + "/fees") } class="text-sm text-indigo-600">← Back to fees</a>
+	</div>
+}

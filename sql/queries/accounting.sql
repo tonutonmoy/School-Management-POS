@@ -1,0 +1,1 @@
+-- SQLC query stubs for accounting (implemented via pgx repository)

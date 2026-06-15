@@ -1,0 +1,661 @@
+package pages
+
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/google/uuid"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+type FeeFormData struct {
+	Sessions  []dto.AcademicSessionResponse
+	Classes   []dto.ClassResponse
+	Sections  []dto.SectionResponse
+	FeeTypes  []dto.FeeTypeResponse
+}
+
+templ FeeTypeList(types []dto.FeeTypeResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Fee Types", csrf, user, feeTypeListContent(types, csrf))
+}
+
+templ feeTypeListContent(types []dto.FeeTypeResponse, csrf string) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Fee Types</h1>
+			<a href="/fees/types/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create</a>
+		</div>
+		<div class="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+			for _, t := range types {
+				<div class="rounded-xl border bg-white p-4">
+					<div class="flex items-center justify-between">
+						<h2 class="font-semibold">{ t.Name }</h2>
+						if t.IsActive {
+							<span class="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Active</span>
+						} else {
+							<span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500">Inactive</span>
+						}
+					</div>
+					<p class="mt-1 text-sm text-slate-500">{ t.Description }</p>
+					<a href={ templ.SafeURL("/fees/types/" + t.ID.String() + "/edit") } class="mt-2 inline-block text-sm text-indigo-600">Edit</a>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ FeeTypeForm(title string, ft *dto.FeeTypeResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, feeTypeFormContent(title, ft, csrf))
+}
+
+templ feeTypeFormContent(title string, ft *dto.FeeTypeResponse, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ feeTypeAction(ft) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input name="name" required value={ feeTypeName(ft) } placeholder="Name" class="w-full rounded-lg border px-3 py-2"/>
+			<input name="slug" required value={ feeTypeSlug(ft) } placeholder="slug" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="description" class="w-full rounded-lg border px-3 py-2">{ feeTypeDesc(ft) }</textarea>
+			<label class="flex items-center gap-2"><input type="checkbox" name="is_active" checked?={ feeTypeActive(ft) }/> Active</label>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func feeTypeAction(ft *dto.FeeTypeResponse) string {
+	if ft == nil { return "/fees/types" }
+	return "/fees/types/" + ft.ID.String()
+}
+func feeTypeName(ft *dto.FeeTypeResponse) string { if ft == nil { return "" }; return ft.Name }
+func feeTypeSlug(ft *dto.FeeTypeResponse) string { if ft == nil { return "" }; return ft.Slug }
+func feeTypeDesc(ft *dto.FeeTypeResponse) string { if ft == nil { return "" }; return ft.Description }
+func feeTypeActive(ft *dto.FeeTypeResponse) bool { if ft == nil { return true }; return ft.IsActive }
+
+templ FeeStructureList(structures []dto.FeeStructureResponse, formData *FeeFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Fee Structures", csrf, user, feeStructureListContent(structures, formData, csrf))
+}
+
+templ feeStructureListContent(structures []dto.FeeStructureResponse, formData *FeeFormData, csrf string) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Fee Structures</h1>
+			<a href="/fees/structures/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create</a>
+		</div>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Fee Type</th>
+					<th class="px-4 py-3 text-left">Session / Class</th>
+					<th class="px-4 py-3 text-left">Amount</th>
+					<th class="px-4 py-3 text-left">Frequency</th>
+					<th class="px-4 py-3 text-right">Actions</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, s := range structures {
+						<tr>
+							<td class="px-4 py-3">{ s.FeeTypeName }</td>
+							<td class="px-4 py-3">{ s.SessionName } / { s.ClassName }</td>
+							<td class="px-4 py-3">{ fmt.Sprintf("%.2f", s.Amount) }</td>
+							<td class="px-4 py-3">{ s.Frequency }</td>
+							<td class="px-4 py-3 text-right"><a href={ templ.SafeURL("/fees/structures/" + s.ID.String() + "/edit") } class="text-indigo-600">Edit</a></td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ FeeStructureForm(title string, structure *dto.FeeStructureResponse, formData *FeeFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, feeStructureFormContent(title, structure, formData, csrf))
+}
+
+templ feeStructureFormContent(title string, structure *dto.FeeStructureResponse, formData *FeeFormData, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ feeStructAction(structure) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<select name="fee_type_id" required class="w-full rounded-lg border px-3 py-2">
+				for _, ft := range formData.FeeTypes {
+					<option value={ ft.ID.String() } selected?={ feeStructTypeSel(structure, ft.ID) }>{ ft.Name }</option>
+				}
+			</select>
+			<select name="session_id" required class="w-full rounded-lg border px-3 py-2">
+				for _, s := range formData.Sessions {
+					<option value={ s.ID.String() } selected?={ feeStructSessionSel(structure, s.ID) }>{ s.Name }</option>
+				}
+			</select>
+			<select name="class_id" required class="w-full rounded-lg border px-3 py-2">
+				for _, c := range formData.Classes {
+					<option value={ c.ID.String() } selected?={ feeStructClassSel(structure, c.ID) }>{ c.Name }</option>
+				}
+			</select>
+			<input name="amount" type="number" step="0.01" required value={ feeStructAmount(structure) } placeholder="Amount" class="w-full rounded-lg border px-3 py-2"/>
+			<input name="due_day" type="number" min="1" max="28" value={ feeStructDueDay(structure) } placeholder="Due day" class="w-full rounded-lg border px-3 py-2"/>
+			<select name="frequency" class="w-full rounded-lg border px-3 py-2">
+				<option value="one_time" selected?={ feeStructFreq(structure) == "one_time" }>One Time</option>
+				<option value="monthly" selected?={ feeStructFreq(structure) == "monthly" }>Monthly</option>
+				<option value="quarterly" selected?={ feeStructFreq(structure) == "quarterly" }>Quarterly</option>
+				<option value="half_yearly" selected?={ feeStructFreq(structure) == "half_yearly" }>Half Yearly</option>
+				<option value="yearly" selected?={ feeStructFreq(structure) == "yearly" }>Yearly</option>
+			</select>
+			<label class="flex items-center gap-2"><input type="checkbox" name="is_active" checked?={ feeStructActive(structure) }/> Active</label>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func feeStructAction(s *dto.FeeStructureResponse) string {
+	if s == nil { return "/fees/structures" }
+	return "/fees/structures/" + s.ID.String()
+}
+func feeStructAmount(s *dto.FeeStructureResponse) string {
+	if s == nil { return "" }
+	return fmt.Sprintf("%.2f", s.Amount)
+}
+func feeStructDueDay(s *dto.FeeStructureResponse) string {
+	if s == nil { return "10" }
+	return strconv.Itoa(s.DueDay)
+}
+func feeStructFreq(s *dto.FeeStructureResponse) string {
+	if s == nil { return "monthly" }
+	return s.Frequency
+}
+func feeStructActive(s *dto.FeeStructureResponse) bool { if s == nil { return true }; return s.IsActive }
+func feeStructTypeSel(s *dto.FeeStructureResponse, id uuid.UUID) bool { return s != nil && s.FeeTypeID == id }
+func feeStructSessionSel(s *dto.FeeStructureResponse, id uuid.UUID) bool { return s != nil && s.SessionID == id }
+func feeStructClassSel(s *dto.FeeStructureResponse, id uuid.UUID) bool { return s != nil && s.ClassID == id }
+
+func formatInt64(n int64) string { return strconv.FormatInt(n, 10) }
+
+templ BillList(data *dto.PaginatedBills, filter dto.BillSearchFilter, formData *FeeFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Student Bills", csrf, user, billListContent(data, filter, csrf))
+}
+
+templ billListContent(data *dto.PaginatedBills, filter dto.BillSearchFilter, csrf string) {
+	<div>
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<h1 class="text-2xl font-bold">Student Bills</h1>
+			<div class="flex gap-2">
+				<a href="/fees/bills/generate" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Generate Bills</a>
+				<a href="/fees/collect" class="rounded-lg border px-4 py-2 text-sm">Collect Fee</a>
+			</div>
+		</div>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Invoice</th>
+					<th class="px-4 py-3 text-left">Student</th>
+					<th class="px-4 py-3 text-left">Period</th>
+					<th class="px-4 py-3 text-right">Total</th>
+					<th class="px-4 py-3 text-right">Due</th>
+					<th class="px-4 py-3 text-left">Status</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, b := range data.Items {
+						<tr>
+							<td class="px-4 py-3"><a href={ templ.SafeURL("/fees/bills/" + b.ID.String()) } class="text-indigo-600">{ b.InvoiceNumber }</a></td>
+							<td class="px-4 py-3">{ b.StudentName }</td>
+							<td class="px-4 py-3">{ b.BillPeriod }</td>
+							<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", b.TotalAmount) }</td>
+							<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", b.DueAmount) }</td>
+							<td class="px-4 py-3">{ b.Status }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ BillGenerate(formData *FeeFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Generate Bills", csrf, user, billGenerateContent(formData, csrf))
+}
+
+templ billGenerateContent(formData *FeeFormData, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">Generate Bills</h1>
+		<form method="POST" action="/fees/bills/generate" class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<select name="session_id" required class="w-full rounded-lg border px-3 py-2">
+				for _, s := range formData.Sessions {
+					<option value={ s.ID.String() }>{ s.Name }</option>
+				}
+			</select>
+			<select name="class_id" class="w-full rounded-lg border px-3 py-2">
+				<option value="">All classes</option>
+				for _, c := range formData.Classes {
+					<option value={ c.ID.String() }>{ c.Name }</option>
+				}
+			</select>
+			<input name="bill_period" required placeholder="YYYY-MM" class="w-full rounded-lg border px-3 py-2"/>
+			<label class="flex items-center gap-2"><input type="checkbox" name="regenerate"/> Regenerate existing</label>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Generate</button>
+		</form>
+	</div>
+}
+
+templ BillDetail(bill *dto.StudentBillResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Bill " + bill.InvoiceNumber, csrf, user, billDetailContent(bill))
+}
+
+templ billDetailContent(bill *dto.StudentBillResponse) {
+	<div>
+		<h1 class="text-2xl font-bold">{ bill.InvoiceNumber }</h1>
+		<p class="text-slate-500">{ bill.StudentName } — { bill.ClassName } / { bill.SectionName }</p>
+		<div class="mt-4 grid gap-4 sm:grid-cols-4">
+			@components.StatCard("Total", fmt.Sprintf("%.2f", bill.TotalAmount), "text-indigo-600")
+			@components.StatCard("Paid", fmt.Sprintf("%.2f", bill.PaidAmount), "text-emerald-600")
+			@components.StatCard("Due", fmt.Sprintf("%.2f", bill.DueAmount), "text-red-600")
+			@components.StatCard("Status", bill.Status, "text-slate-600")
+		</div>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Fee Type</th>
+					<th class="px-4 py-3 text-right">Amount</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, it := range bill.Items {
+						<tr>
+							<td class="px-4 py-3">{ it.FeeTypeName }</td>
+							<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", it.Amount) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ FeeCollect(flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Fee Collection", csrf, user, feeCollectContent(flash, flashType, csrf))
+}
+
+templ feeCollectContent(flash, flashType, csrf string) {
+	<div class="max-w-2xl">
+		<h1 class="text-2xl font-bold">Fee Collection</h1>
+		@components.Flash(flash, flashType)
+		<form method="POST" action="/fees/collect" class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input name="student_id" required placeholder="Student UUID" class="w-full rounded-lg border px-3 py-2"
+				hx-get="/fees/collect/student/STUDENT_ID/bills" hx-trigger="change" hx-target="#pending-bills"
+				id="student-id-input"/>
+			<div id="pending-bills"></div>
+			<input name="amount" type="number" step="0.01" required placeholder="Total payment amount" class="w-full rounded-lg border px-3 py-2"/>
+			<select name="payment_method" required class="w-full rounded-lg border px-3 py-2">
+				<option value="cash">Cash</option>
+				<option value="bank">Bank</option>
+				<option value="bkash">bKash</option>
+				<option value="nagad">Nagad</option>
+				<option value="rocket">Rocket</option>
+				<option value="card">Card</option>
+			</select>
+			<input type="date" name="collection_date" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="remarks" placeholder="Remarks" class="w-full rounded-lg border px-3 py-2"></textarea>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Collect Payment</button>
+		</form>
+		<script>
+			document.getElementById('student-id-input')?.addEventListener('change', function() {
+				this.setAttribute('hx-get', '/fees/collect/student/' + this.value + '/bills');
+				htmx.process(this);
+			});
+		</script>
+	</div>
+}
+
+templ FinanceDashboard(stats *dto.FinanceDashboardStats, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Finance Dashboard", csrf, user, financeDashboardContent(stats))
+}
+
+templ financeDashboardContent(stats *dto.FinanceDashboardStats) {
+	<div>
+		<h1 class="text-2xl font-bold">Finance Dashboard</h1>
+		<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			@components.StatCard("Today's Collection", fmt.Sprintf("%.2f", stats.TodayCollection), "text-emerald-600")
+			@components.StatCard("Monthly Collection", fmt.Sprintf("%.2f", stats.MonthlyCollection), "text-indigo-600")
+			@components.StatCard("Outstanding Dues", fmt.Sprintf("%.2f", stats.OutstandingDues), "text-red-600")
+			@components.StatCard("Students With Dues", strconv.FormatInt(stats.StudentsWithDues, 10), "text-amber-600")
+		</div>
+		<div class="mt-8 grid gap-6 lg:grid-cols-2">
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Collection Trend</h2>
+				<div class="mt-4 space-y-2">
+					for _, t := range stats.CollectionTrend {
+						<div class="flex justify-between text-sm"><span>{ t.Label }</span><span>{ fmt.Sprintf("%.2f", t.Amount) }</span></div>
+					}
+				</div>
+			</div>
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Payment Methods</h2>
+				<div class="mt-4 space-y-2">
+					for _, m := range stats.PaymentMethodBreakdown {
+						<div class="flex justify-between text-sm"><span>{ m.Method }</span><span>{ fmt.Sprintf("%.2f", m.Amount) }</span></div>
+					}
+				</div>
+			</div>
+		</div>
+		<div class="mt-6 flex flex-wrap gap-2">
+			<a href="/fees/collect" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Collect Fee</a>
+			<a href="/fees/bills" class="rounded-lg border px-4 py-2 text-sm">Bills</a>
+			<a href="/fees/dues" class="rounded-lg border px-4 py-2 text-sm">Due List</a>
+			<a href="/reports/fees/collection/daily" class="rounded-lg border px-4 py-2 text-sm">Reports</a>
+		</div>
+	</div>
+}
+
+templ DueList(rows []dto.DueStudentRow, formData *FeeFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Due List", csrf, user, dueListContent(rows))
+}
+
+templ dueListContent(rows []dto.DueStudentRow) {
+	<div>
+		<h1 class="text-2xl font-bold">Student Due List</h1>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Student</th>
+					<th class="px-4 py-3 text-left">Class</th>
+					<th class="px-4 py-3 text-right">Total Due</th>
+					<th class="px-4 py-3 text-right">Overdue</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, r := range rows {
+						<tr>
+							<td class="px-4 py-3">{ r.StudentName } <span class="text-xs text-slate-500">{ r.AdmissionNo }</span></td>
+							<td class="px-4 py-3">{ r.ClassName } / { r.SectionName }</td>
+							<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", r.TotalDue) }</td>
+							<td class="px-4 py-3 text-right text-red-600">{ fmt.Sprintf("%.2f", r.OverdueAmount) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ ReceiptPage(receipt *dto.ReceiptResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Receipt " + receipt.ReceiptNumber, csrf, user, receiptContent(receipt))
+}
+
+templ receiptContent(receipt *dto.ReceiptResponse) {
+	<div class="max-w-lg rounded-xl border bg-white p-8">
+		<h1 class="text-xl font-bold text-center">{ receipt.SchoolName }</h1>
+		<p class="text-center text-sm text-slate-500">Payment Receipt</p>
+		<div class="mt-6 space-y-2 text-sm">
+			<p><strong>Receipt:</strong> { receipt.ReceiptNumber }</p>
+			<p><strong>Student:</strong> { receipt.StudentName } ({ receipt.AdmissionNo })</p>
+			<p><strong>Amount:</strong> { fmt.Sprintf("%.2f", receipt.TotalAmount) }</p>
+			<p><strong>Date:</strong> { receipt.IssuedAt.Format("2006-01-02") }</p>
+		</div>
+		<a href={ templ.SafeURL("/receipts/" + receipt.ID.String() + "/pdf") } class="mt-6 inline-block rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Download PDF</a>
+	</div>
+}
+
+templ ReceiptVerify(valid bool, receipt *dto.ReceiptResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Receipt Verification", csrf, user, receiptVerifyContent(valid, receipt))
+}
+
+templ receiptVerifyContent(valid bool, receipt *dto.ReceiptResponse) {
+	<div class="mx-auto max-w-md rounded-xl border bg-white p-8 text-center">
+		if valid && receipt != nil {
+			<p class="text-emerald-600 font-semibold">✓ Valid Receipt</p>
+			<p class="mt-4">{ receipt.ReceiptNumber } — { fmt.Sprintf("%.2f", receipt.TotalAmount) }</p>
+			<p class="text-sm text-slate-500">{ receipt.StudentName }</p>
+		} else {
+			<p class="text-red-600 font-semibold">✗ Invalid or not found</p>
+		}
+	</div>
+}
+
+templ ParentFee(summary *dto.ParentFeeSummary, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Fee Summary", csrf, user, parentFeeContent(summary))
+}
+
+templ parentFeeContent(summary *dto.ParentFeeSummary) {
+	<div>
+		<h1 class="text-2xl font-bold">Fee Summary</h1>
+		<p class="text-slate-500">{ summary.StudentName }</p>
+		<div class="mt-4 grid gap-4 sm:grid-cols-2">
+			@components.StatCard("Current Due", fmt.Sprintf("%.2f", summary.CurrentDue), "text-red-600")
+			@components.StatCard("Total Paid", fmt.Sprintf("%.2f", summary.TotalPaid), "text-emerald-600")
+		</div>
+		<h2 class="mt-8 font-semibold">Recent Payments</h2>
+		<div class="mt-2 space-y-2">
+			for _, p := range summary.RecentPayments {
+				<div class="rounded-lg border p-3 text-sm">
+					{ p.PaymentNumber } — { fmt.Sprintf("%.2f", p.Amount) } via { p.PaymentMethod }
+					if p.ReceiptID != nil {
+						<a href={ templ.SafeURL("/receipts/" + p.ReceiptID.String() + "/pdf") } class="ml-2 text-indigo-600">PDF</a>
+					}
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ CollectionReport(title string, payments []dto.PaymentResponse, filter dto.FinanceReportFilter, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, collectionReportContent(title, payments, filter))
+}
+
+templ collectionReportContent(title string, payments []dto.PaymentResponse, filter dto.FinanceReportFilter) {
+	<div>
+		<div class="flex justify-between">
+			<h1 class="text-2xl font-bold">{ title }</h1>
+			<div class="flex gap-2">
+				<a href="/reports/fees/collection/export.csv" class="rounded-lg border px-3 py-2 text-sm">CSV</a>
+				<a href="/reports/fees/collection/export.xlsx" class="rounded-lg border px-3 py-2 text-sm">Excel</a>
+			</div>
+		</div>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Payment #</th>
+					<th class="px-4 py-3 text-left">Student</th>
+					<th class="px-4 py-3 text-right">Amount</th>
+					<th class="px-4 py-3 text-left">Method</th>
+					<th class="px-4 py-3 text-left">Date</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, p := range payments {
+						<tr>
+							<td class="px-4 py-3">{ p.PaymentNumber }</td>
+							<td class="px-4 py-3">{ p.StudentName }</td>
+							<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", p.Amount) }</td>
+							<td class="px-4 py-3">{ p.PaymentMethod }</td>
+							<td class="px-4 py-3">{ p.CollectionDate.Format("2006-01-02") }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ DiscountList(discounts []dto.StudentDiscountResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Discounts", csrf, user, discountListContent(discounts))
+}
+
+templ discountListContent(discounts []dto.StudentDiscountResponse) {
+	<div>
+		<div class="flex justify-between"><h1 class="text-2xl font-bold">Discounts & Scholarships</h1>
+			<a href="/fees/discounts/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Add</a>
+		</div>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<tbody class="divide-y">
+					for _, d := range discounts {
+						<tr>
+							<td class="px-4 py-3">{ d.StudentName }</td>
+							<td class="px-4 py-3">{ d.Reason }</td>
+							<td class="px-4 py-3">{ d.DiscountType }: { fmt.Sprintf("%.2f", d.DiscountValue) }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ DiscountForm(formData *FeeFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Add Discount", csrf, user, discountFormContent(formData, csrf))
+}
+
+templ discountFormContent(formData *FeeFormData, csrf string) {
+	<div class="max-w-lg">
+		<form method="POST" action="/fees/discounts" class="space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input name="student_id" required placeholder="Student UUID" class="w-full rounded-lg border px-3 py-2"/>
+			<select name="session_id" class="w-full rounded-lg border px-3 py-2">
+				for _, s := range formData.Sessions {
+					<option value={ s.ID.String() }>{ s.Name }</option>
+				}
+			</select>
+			<select name="discount_type" class="w-full rounded-lg border px-3 py-2">
+				<option value="fixed">Fixed Amount</option>
+				<option value="percentage">Percentage</option>
+			</select>
+			<input name="discount_value" type="number" step="0.01" required class="w-full rounded-lg border px-3 py-2"/>
+			<select name="reason" class="w-full rounded-lg border px-3 py-2">
+				<option value="scholarship">Scholarship</option>
+				<option value="waiver">Waiver</option>
+				<option value="sibling">Sibling Discount</option>
+				<option value="special">Special Discount</option>
+			</select>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+templ OverdueList(data *dto.PaginatedBills, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Overdue Bills", csrf, user, overdueListContent(data))
+}
+
+templ overdueListContent(data *dto.PaginatedBills) {
+	<div>
+		<h1 class="text-2xl font-bold">Overdue Bills</h1>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<tbody class="divide-y">
+					for _, b := range data.Items {
+						<tr>
+							<td class="px-4 py-3">{ b.InvoiceNumber }</td>
+							<td class="px-4 py-3">{ b.StudentName }</td>
+							<td class="px-4 py-3 text-red-600">{ fmt.Sprintf("%.2f", b.DueAmount) }</td>
+							<td class="px-4 py-3">{ b.DueDate.Format("2006-01-02") }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ StudentLedger(entries []dto.StudentLedgerEntry, studentID uuid.UUID, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Student Ledger", csrf, user, studentLedgerContent(entries))
+}
+
+templ studentLedgerContent(entries []dto.StudentLedgerEntry) {
+	<div>
+		<h1 class="text-2xl font-bold">Student Ledger</h1>
+		<table class="mt-4 min-w-full divide-y text-sm rounded-xl border bg-white">
+			<thead class="bg-slate-50"><tr>
+				<th class="px-4 py-3 text-left">Date</th><th class="px-4 py-3 text-left">Ref</th>
+				<th class="px-4 py-3 text-right">Debit</th><th class="px-4 py-3 text-right">Credit</th>
+				<th class="px-4 py-3 text-right">Balance</th>
+			</tr></thead>
+			<tbody class="divide-y">
+				for _, e := range entries {
+					<tr>
+						<td class="px-4 py-3">{ e.Date.Format("2006-01-02") }</td>
+						<td class="px-4 py-3">{ e.Reference }</td>
+						<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", e.Debit) }</td>
+						<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", e.Credit) }</td>
+						<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", e.Balance) }</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+templ PaymentHistory(payments []dto.PaymentResponse, studentID uuid.UUID, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Payment History", csrf, user, paymentHistoryContent(payments))
+}
+
+templ paymentHistoryContent(payments []dto.PaymentResponse) {
+	<div>
+		<h1 class="text-2xl font-bold">Payment History</h1>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<tbody class="divide-y">
+					for _, p := range payments {
+						<tr>
+							<td class="px-4 py-3">{ p.PaymentNumber }</td>
+							<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", p.Amount) }</td>
+							<td class="px-4 py-3">{ p.PaymentMethod }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ DueStatement(data *dto.PaginatedBills, studentID uuid.UUID, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Due Statement", csrf, user, dueStatementContent(data))
+}
+
+templ dueStatementContent(data *dto.PaginatedBills) {
+	<div>
+		<h1 class="text-2xl font-bold">Due Statement</h1>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<tbody class="divide-y">
+					for _, b := range data.Items {
+						<tr>
+							<td class="px-4 py-3">{ b.InvoiceNumber }</td>
+							<td class="px-4 py-3 text-right">{ fmt.Sprintf("%.2f", b.DueAmount) }</td>
+							<td class="px-4 py-3">{ b.Status }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ IncomeSummary(stats *dto.FinanceDashboardStats, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Income Summary", csrf, user, financeDashboardContent(stats))
+}
+
+templ MethodReport(stats *dto.FinanceDashboardStats, filter dto.FinanceReportFilter, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Collection By Method", csrf, user, methodReportContent(stats))
+}
+
+templ methodReportContent(stats *dto.FinanceDashboardStats) {
+	<div>
+		<h1 class="text-2xl font-bold">Collection By Method</h1>
+		for _, m := range stats.PaymentMethodBreakdown {
+			<div class="mt-2 flex justify-between rounded-lg border p-3">
+				<span>{ m.Method }</span>
+				<span>{ fmt.Sprintf("%.2f", m.Amount) } — { formatInt64(m.Count) }</span>
+			</div>
+		}
+	</div>
+}
+
+templ FeeTypeReport(items []dto.FinanceTrendPoint, filter dto.FinanceReportFilter, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Fee Type Collection", csrf, user, feeTypeReportContent(items))
+}
+
+templ feeTypeReportContent(items []dto.FinanceTrendPoint) {
+	<div>
+		<h1 class="text-2xl font-bold">Fee Type Collection</h1>
+		for _, i := range items {
+			<div class="mt-2 flex justify-between rounded-lg border p-3"><span>{ i.Label }</span><span>{ fmt.Sprintf("%.2f", i.Amount) }</span></div>
+		}
+	</div>
+}

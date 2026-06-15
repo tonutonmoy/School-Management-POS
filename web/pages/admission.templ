@@ -1,0 +1,286 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+type AdmissionFormData struct {
+	Sessions []dto.AcademicSessionResponse
+	Classes  []dto.ClassResponse
+}
+
+templ PublicAdmissionApply(formData *AdmissionFormData, flash, flashType, csrf string) {
+	@layouts.PublicAuthLayout("Online Admission", csrf, publicAdmissionForm(formData, flash, flashType, csrf))
+}
+
+templ publicAdmissionForm(formData *AdmissionFormData, flash, flashType, csrf string) {
+	@layouts.PublicCard("Online Admission Application", publicAdmissionFormFields(formData, flash, flashType, csrf))
+}
+
+templ publicAdmissionFormFields(formData *AdmissionFormData, flash, flashType, csrf string) {
+	@layouts.PublicFlash(flash, flashType)
+	<form method="POST" action="/admission/apply" enctype="multipart/form-data" class="space-y-6">
+		@components.CSRFInput(csrf)
+		<fieldset class="space-y-3">
+			<legend class="font-semibold text-indigo-700">Student Information</legend>
+			<div class="grid gap-3 sm:grid-cols-2">
+				<input type="text" name="first_name" placeholder="First Name" required class="rounded-lg border px-3 py-2"/>
+				<input type="text" name="last_name" placeholder="Last Name" required class="rounded-lg border px-3 py-2"/>
+				<input type="date" name="date_of_birth" required class="rounded-lg border px-3 py-2"/>
+				<select name="gender" required class="rounded-lg border px-3 py-2">
+					<option value="">Gender</option>
+					<option value="male">Male</option>
+					<option value="female">Female</option>
+				</select>
+				<input type="text" name="phone" placeholder="Phone" class="rounded-lg border px-3 py-2"/>
+				<input type="email" name="email" placeholder="Email" class="rounded-lg border px-3 py-2"/>
+			</div>
+			<textarea name="address" placeholder="Address" rows="2" class="w-full rounded-lg border px-3 py-2"></textarea>
+		</fieldset>
+		<fieldset class="space-y-3">
+			<legend class="font-semibold text-indigo-700">Parent Information</legend>
+			<div class="grid gap-3 sm:grid-cols-2">
+				<input type="text" name="father_name" placeholder="Father Name" class="rounded-lg border px-3 py-2"/>
+				<input type="text" name="father_phone" placeholder="Father Phone" class="rounded-lg border px-3 py-2"/>
+				<input type="text" name="mother_name" placeholder="Mother Name" class="rounded-lg border px-3 py-2"/>
+				<input type="text" name="mother_phone" placeholder="Mother Phone" class="rounded-lg border px-3 py-2"/>
+			</div>
+		</fieldset>
+		<fieldset class="space-y-3">
+			<legend class="font-semibold text-indigo-700">Previous School</legend>
+			<input type="text" name="previous_school" placeholder="School Name" class="w-full rounded-lg border px-3 py-2"/>
+			<div class="grid gap-3 sm:grid-cols-2">
+				<input type="text" name="previous_class" placeholder="Last Class" class="rounded-lg border px-3 py-2"/>
+				<input type="text" name="previous_board" placeholder="Board" class="rounded-lg border px-3 py-2"/>
+			</div>
+		</fieldset>
+		<fieldset class="space-y-3">
+			<legend class="font-semibold text-indigo-700">Desired Class</legend>
+			<div class="grid gap-3 sm:grid-cols-2">
+				<select name="session_id" required class="rounded-lg border px-3 py-2">
+					<option value="">Academic Session</option>
+					if formData != nil {
+						for _, s := range formData.Sessions {
+							<option value={ s.ID.String() }>{ s.Name }</option>
+						}
+					}
+				</select>
+				<select name="class_id" required class="rounded-lg border px-3 py-2">
+					<option value="">Class</option>
+					if formData != nil {
+						for _, c := range formData.Classes {
+							<option value={ c.ID.String() }>{ c.Name }</option>
+						}
+					}
+				</select>
+			</div>
+		</fieldset>
+		<fieldset class="space-y-3">
+			<legend class="font-semibold text-indigo-700">Documents</legend>
+			<div class="grid gap-3 sm:grid-cols-3">
+				<label class="text-sm">Birth Certificate <input type="file" name="birth_certificate" class="mt-1 block w-full text-sm"/></label>
+				<label class="text-sm">Marksheet <input type="file" name="previous_marksheet" class="mt-1 block w-full text-sm"/></label>
+				<label class="text-sm">Photo <input type="file" name="passport_photo" class="mt-1 block w-full text-sm"/></label>
+			</div>
+		</fieldset>
+		<button type="submit" class="w-full rounded-lg bg-indigo-600 py-3 font-medium text-white hover:bg-indigo-700">Submit Application</button>
+		<p class="text-center text-sm text-slate-500">Already applied? <a href="/admission/track" class="text-indigo-600">Track your application</a></p>
+	</form>
+}
+
+templ PublicAdmissionSuccess(app *dto.AdmissionApplicationResponse) {
+	@layouts.PublicAuthLayout("Application Submitted", "", publicAdmissionSuccessContent(app))
+}
+
+templ publicAdmissionSuccessContent(app *dto.AdmissionApplicationResponse) {
+	@layouts.PublicCard("Application Submitted", admissionSuccessInner(app))
+}
+
+templ admissionSuccessInner(app *dto.AdmissionApplicationResponse) {
+	if app != nil {
+		<div class="space-y-4 text-center">
+			<p class="text-lg text-emerald-700 font-semibold">Your application has been received!</p>
+			<div class="rounded-lg bg-slate-50 p-4 text-left text-sm">
+				<p><strong>Application Number:</strong> { app.ApplicationNumber }</p>
+				<p><strong>Tracking Token:</strong> { app.TrackingToken }</p>
+				<p class="mt-2 text-slate-500">Save these details to track your application status.</p>
+			</div>
+			<a href="/admission/track" class="inline-block rounded-lg bg-indigo-600 px-6 py-2 text-white">Track Application</a>
+		</div>
+	}
+}
+
+templ PublicAdmissionTrack(flash, flashType, csrf string) {
+	@layouts.PublicAuthLayout("Track Application", csrf, publicAdmissionTrackForm(flash, flashType, csrf))
+}
+
+templ publicAdmissionTrackForm(flash, flashType, csrf string) {
+	@layouts.PublicCard("Track Your Application", trackFormInner(flash, flashType, csrf))
+}
+
+templ trackFormInner(flash, flashType, csrf string) {
+	@layouts.PublicFlash(flash, flashType)
+	<form method="POST" action="/admission/track" class="space-y-4">
+		@components.CSRFInput(csrf)
+		<input type="text" name="application_number" placeholder="Application Number (APP-2026-00001)" required class="w-full rounded-lg border px-3 py-2"/>
+		<input type="text" name="tracking_token" placeholder="Tracking Token" required class="w-full rounded-lg border px-3 py-2"/>
+		<button type="submit" class="w-full rounded-lg bg-indigo-600 py-2 text-white">Track</button>
+	</form>
+}
+
+templ PublicAdmissionTrackResult(app *dto.AdmissionApplicationResponse, gateways []dto.PaymentGatewayResponse, csrf string) {
+	@layouts.PublicAuthLayout("Application Status", csrf, trackResultContent(app, gateways, csrf))
+}
+
+templ trackResultContent(app *dto.AdmissionApplicationResponse, gateways []dto.PaymentGatewayResponse, csrf string) {
+	@layouts.PublicCard("Application Status", trackResultInner(app, gateways, csrf))
+}
+
+templ trackResultInner(app *dto.AdmissionApplicationResponse, gateways []dto.PaymentGatewayResponse, csrf string) {
+	if app != nil {
+		<div class="space-y-3">
+			<p><strong>Application:</strong> { app.ApplicationNumber }</p>
+			<p><strong>Applicant:</strong> { app.FullName }</p>
+			<p><strong>Status:</strong> <span class="rounded-full bg-indigo-100 px-2 py-0.5 text-indigo-800 capitalize">{ app.Status }</span></p>
+			<p><strong>Class:</strong> { app.ClassName }</p>
+			<p><strong>Payment:</strong> { app.PaymentStatus } — ৳{ fmt.Sprintf("%.2f", app.AdmissionFeeAmount) }</p>
+			if app.ReceiptNumber != "" {
+				<p><strong>Receipt:</strong> { app.ReceiptNumber }</p>
+			}
+			if app.ReviewNotes != "" {
+				<p class="text-sm text-slate-600"><strong>Notes:</strong> { app.ReviewNotes }</p>
+			}
+			if app.PaymentStatus != "paid" && app.AdmissionFeeAmount > 0 && len(gateways) > 0 {
+				<form method="POST" action="/admission/pay" class="mt-4 space-y-3 rounded-lg border bg-emerald-50 p-4">
+					@components.CSRFInput(csrf)
+					<input type="hidden" name="application_number" value={ app.ApplicationNumber }/>
+					<input type="hidden" name="tracking_token" value={ app.TrackingToken }/>
+					<p class="font-semibold text-emerald-800">Pay Admission Fee Online</p>
+					<select name="gateway" required class="w-full rounded-lg border px-3 py-2">
+						for _, g := range gateways {
+							<option value={ g.Slug }>{ g.Name }</option>
+						}
+					</select>
+					<button type="submit" class="w-full rounded-lg bg-emerald-600 py-2 text-white">Pay ৳{ fmt.Sprintf("%.2f", app.AdmissionFeeAmount) }</button>
+				</form>
+			}
+		</div>
+	}
+}
+
+templ AdmissionDashboard(stats *dto.AdmissionDashboardStats, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Admission Dashboard", csrf, user, admissionDashboardContent(stats))
+}
+
+templ admissionDashboardContent(stats *dto.AdmissionDashboardStats) {
+	<div class="space-y-6">
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Admission Dashboard</h1>
+			<a href="/admissions" class="text-indigo-600">View Applications</a>
+		</div>
+		if stats != nil {
+			<div class="grid gap-4 sm:grid-cols-3 lg:grid-cols-4">
+				@components.StatCard("Total", fmt.Sprintf("%d", stats.TotalApplications), "indigo")
+				@components.StatCard("Pending", fmt.Sprintf("%d", stats.PendingCount), "amber")
+				@components.StatCard("Under Review", fmt.Sprintf("%d", stats.UnderReviewCount), "blue")
+				@components.StatCard("Approved", fmt.Sprintf("%d", stats.ApprovedCount), "emerald")
+				@components.StatCard("Admitted", fmt.Sprintf("%d", stats.AdmittedCount), "emerald")
+				@components.StatCard("Rejected", fmt.Sprintf("%d", stats.RejectedCount), "red")
+				@components.StatCard("Today", fmt.Sprintf("%d", stats.TodayApplications), "slate")
+			</div>
+		}
+	</div>
+}
+
+templ AdmissionList(data *dto.PaginatedAdmissionApplications, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Admission Applications", csrf, user, admissionListContent(data))
+}
+
+templ admissionListContent(data *dto.PaginatedAdmissionApplications) {
+	<div class="space-y-4">
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Applications</h1>
+			<a href="/admissions/export.csv" class="text-sm text-indigo-600">Export CSV</a>
+		</div>
+		<table class="min-w-full rounded-xl border bg-white text-sm shadow-sm">
+			<thead class="bg-slate-50 text-left"><tr>
+				<th class="px-4 py-2">App No</th><th class="px-4 py-2">Name</th><th class="px-4 py-2">Class</th>
+				<th class="px-4 py-2">Status</th><th class="px-4 py-2">Payment</th><th class="px-4 py-2">Date</th><th></th>
+			</tr></thead>
+			<tbody class="divide-y">
+				if data != nil {
+					for _, a := range data.Items {
+						<tr>
+							<td class="px-4 py-2">{ a.ApplicationNumber }</td>
+							<td class="px-4 py-2">{ a.FullName }</td>
+							<td class="px-4 py-2">{ a.ClassName }</td>
+							<td class="px-4 py-2 capitalize">{ a.Status }</td>
+							<td class="px-4 py-2">{ a.PaymentStatus }</td>
+							<td class="px-4 py-2">{ a.CreatedAt.Format("2006-01-02") }</td>
+							<td class="px-4 py-2"><a href={ templ.SafeURL("/admissions/" + a.ID.String()) } class="text-indigo-600">Review</a></td>
+						</tr>
+					}
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+templ AdmissionDetail(app *dto.AdmissionApplicationResponse, sections []dto.SectionResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Application Detail", csrf, user, admissionDetailContent(app, sections, csrf))
+}
+
+templ admissionDetailContent(app *dto.AdmissionApplicationResponse, sections []dto.SectionResponse, csrf string) {
+	if app != nil {
+		<div class="space-y-6">
+			<h1 class="text-2xl font-bold">{ app.ApplicationNumber } — { app.FullName }</h1>
+			<div class="grid gap-4 sm:grid-cols-3">
+				@components.StatCard("Status", app.Status, "indigo")
+				@components.StatCard("Payment", app.PaymentStatus, "amber")
+				@components.StatCard("Fee", fmt.Sprintf("৳%.0f", app.AdmissionFeeAmount), "emerald")
+			</div>
+			<div class="rounded-xl border bg-white p-6 shadow-sm text-sm space-y-2">
+				<p><strong>Session:</strong> { app.SessionName } · <strong>Class:</strong> { app.ClassName }</p>
+				<p><strong>Phone:</strong> { app.Phone } · <strong>Email:</strong> { app.Email }</p>
+				<p><strong>Previous School:</strong> { app.PreviousSchool }</p>
+				<p><strong>Father:</strong> { app.FatherName } ({ app.FatherPhone })</p>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				<form method="POST" action={ templ.SafeURL("/admissions/" + app.ID.String() + "/review") }>
+					@components.CSRFInput(csrf)
+					<button type="submit" class="rounded-lg border px-4 py-2 text-sm">Under Review</button>
+				</form>
+				<form method="POST" action={ templ.SafeURL("/admissions/" + app.ID.String() + "/approve") }>
+					@components.CSRFInput(csrf)
+					<button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white">Approve</button>
+				</form>
+				<form method="POST" action={ templ.SafeURL("/admissions/" + app.ID.String() + "/reject") }>
+					@components.CSRFInput(csrf)
+					<button type="submit" class="rounded-lg bg-red-600 px-4 py-2 text-sm text-white">Reject</button>
+				</form>
+			</div>
+			if app.Status == "approved" || app.Status == "under_review" {
+				<form method="POST" action={ templ.SafeURL("/admissions/" + app.ID.String() + "/admit") } class="rounded-xl border bg-white p-4">
+					@components.CSRFInput(csrf)
+					<h2 class="font-semibold mb-2">Convert to Student</h2>
+					<select name="section_id" class="rounded-lg border px-3 py-2 text-sm">
+						for _, s := range sections {
+							<option value={ s.ID.String() }>{ s.Name }</option>
+						}
+					</select>
+					<button type="submit" class="ml-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Admit Student</button>
+				</form>
+			}
+			<form method="POST" action={ templ.SafeURL("/admissions/" + app.ID.String() + "/payment") } class="rounded-xl border bg-white p-4">
+				@components.CSRFInput(csrf)
+				<h2 class="font-semibold mb-2">Record Payment</h2>
+				<input type="text" name="payment_reference" placeholder="Reference" class="rounded-lg border px-3 py-2 text-sm"/>
+				<input type="number" name="amount" step="0.01" placeholder="Amount" class="ml-2 rounded-lg border px-3 py-2 text-sm"/>
+				<button type="submit" class="ml-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Record</button>
+			</form>
+		</div>
+	}
+}

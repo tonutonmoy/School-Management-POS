@@ -1,0 +1,644 @@
+package pages
+
+import (
+	"net/url"
+	"strconv"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+type HRFormData struct {
+	Departments  []dto.DepartmentResponse
+	Designations []dto.DesignationResponse
+	Classes      []dto.ClassResponse
+	Subjects     []dto.SubjectResponse
+	Sections     []dto.SectionResponse
+}
+
+templ DepartmentList(depts []dto.DepartmentResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Departments", csrf, user, deptListContent(depts))
+}
+
+templ deptListContent(depts []dto.DepartmentResponse) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Departments</h1>
+			<a href="/departments/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create</a>
+		</div>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">Name</th><th class="px-4 py-3 text-left">Type</th>
+					<th class="px-4 py-3 text-left">Teachers</th><th class="px-4 py-3 text-left">Staff</th>
+					<th class="px-4 py-3 text-right">Actions</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, d := range depts {
+						<tr>
+							<td class="px-4 py-3 font-medium">{ d.Name }</td>
+							<td class="px-4 py-3">{ d.DeptType }</td>
+							<td class="px-4 py-3">{ strconv.FormatInt(d.TeacherCount, 10) }</td>
+							<td class="px-4 py-3">{ strconv.FormatInt(d.StaffCount, 10) }</td>
+							<td class="px-4 py-3 text-right"><a href={ templ.SafeURL("/departments/" + d.ID.String() + "/edit") } class="text-indigo-600">Edit</a></td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ DepartmentForm(title string, dept *dto.DepartmentResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, deptFormContent(title, dept, csrf))
+}
+
+templ deptFormContent(title string, dept *dto.DepartmentResponse, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ deptFormAction(dept) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input name="name" required value={ deptName(dept) } placeholder="Name" class="w-full rounded-lg border px-3 py-2"/>
+			<input name="slug" required value={ deptSlug(dept) } placeholder="slug" class="w-full rounded-lg border px-3 py-2"/>
+			<select name="dept_type" class="w-full rounded-lg border px-3 py-2">
+				<option value="employee" selected?={ deptType(dept) == "employee" }>Employee</option>
+				<option value="academic" selected?={ deptType(dept) == "academic" }>Academic</option>
+			</select>
+			<textarea name="description" class="w-full rounded-lg border px-3 py-2">{ deptDesc(dept) }</textarea>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func deptFormAction(d *dto.DepartmentResponse) string {
+	if d == nil { return "/departments" }
+	return "/departments/" + d.ID.String()
+}
+func deptName(d *dto.DepartmentResponse) string { if d == nil { return "" }; return d.Name }
+func deptSlug(d *dto.DepartmentResponse) string { if d == nil { return "" }; return d.Slug }
+func deptDesc(d *dto.DepartmentResponse) string { if d == nil { return "" }; return d.Description }
+func deptType(d *dto.DepartmentResponse) string { if d == nil { return "employee" }; return d.DeptType }
+
+templ DesignationList(items []dto.DesignationResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Designations", csrf, user, desigListContent(items))
+}
+
+templ desigListContent(items []dto.DesignationResponse) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Designations</h1>
+			<a href="/designations/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create</a>
+		</div>
+		<div class="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+			for _, d := range items {
+				<div class="rounded-xl border bg-white p-4">
+					<h2 class="font-semibold">{ d.Name }</h2>
+					<p class="text-sm text-slate-500">{ d.Category }</p>
+					<a href={ templ.SafeURL("/designations/" + d.ID.String() + "/edit") } class="mt-2 inline-block text-sm text-indigo-600">Edit</a>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ DesignationForm(title string, desig *dto.DesignationResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, desigFormContent(title, desig, csrf))
+}
+
+templ desigFormContent(title string, desig *dto.DesignationResponse, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ desigFormAction(desig) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input name="name" required value={ desigName(desig) } class="w-full rounded-lg border px-3 py-2"/>
+			<input name="slug" required value={ desigSlug(desig) } class="w-full rounded-lg border px-3 py-2"/>
+			<input name="category" value={ desigCat(desig) } placeholder="Category" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="description" class="w-full rounded-lg border px-3 py-2">{ desigDesc(desig) }</textarea>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func desigFormAction(d *dto.DesignationResponse) string {
+	if d == nil { return "/designations" }
+	return "/designations/" + d.ID.String()
+}
+func desigName(d *dto.DesignationResponse) string { if d == nil { return "" }; return d.Name }
+func desigSlug(d *dto.DesignationResponse) string { if d == nil { return "" }; return d.Slug }
+func desigCat(d *dto.DesignationResponse) string { if d == nil { return "general" }; return d.Category }
+func desigDesc(d *dto.DesignationResponse) string { if d == nil { return "" }; return d.Description }
+
+templ TeacherList(data *dto.PaginatedTeachers, filter dto.TeacherSearchFilter, formData *HRFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Teachers", csrf, user, teacherListContent(data, filter, formData))
+}
+
+templ teacherListContent(data *dto.PaginatedTeachers, filter dto.TeacherSearchFilter, formData *HRFormData) {
+	<div>
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<h1 class="text-2xl font-bold">Teachers</h1>
+			<div class="flex gap-2">
+				<a href="/reports/hr/teachers/export.csv" class="rounded-lg border px-3 py-2 text-sm">CSV</a>
+				<a href="/reports/hr/teachers/export.xlsx" class="rounded-lg border px-3 py-2 text-sm">Excel</a>
+				<a href="/teachers/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Add Teacher</a>
+			</div>
+		</div>
+		<form method="GET" class="mt-4 flex flex-wrap gap-2">
+			<input name="q" value={ filter.Query } placeholder="Search..." class="rounded-lg border px-3 py-2 text-sm"/>
+			<select name="department_id" class="rounded-lg border px-3 py-2 text-sm">
+				<option value="">All departments</option>
+				for _, d := range formData.Departments {
+					<option value={ d.ID.String() } selected?={ hrDeptSelected(filter.DepartmentID, d.ID) }>{ d.Name }</option>
+				}
+			</select>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Filter</button>
+		</form>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">ID</th><th class="px-4 py-3 text-left">Name</th>
+					<th class="px-4 py-3 text-left">Department</th><th class="px-4 py-3 text-left">Status</th>
+					<th class="px-4 py-3 text-right">Actions</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, t := range data.Items {
+						<tr>
+							<td class="px-4 py-3 font-mono text-xs">{ t.EmployeeID }</td>
+							<td class="px-4 py-3">{ t.FullName }</td>
+							<td class="px-4 py-3">{ t.DepartmentName }</td>
+							<td class="px-4 py-3">{ t.Status }</td>
+							<td class="px-4 py-3 text-right"><a href={ templ.SafeURL("/teachers/" + t.ID.String()) } class="text-indigo-600">View</a></td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<div class="mt-2 flex flex-wrap items-center justify-between gap-2">
+			<p class="text-sm text-slate-500">{ strconv.FormatInt(data.Total, 10) } teachers</p>
+			@components.Pagination(data.Page, data.TotalPages, "/teachers", teacherListQuery(filter))
+		</div>
+	</div>
+}
+
+func teacherListQuery(f dto.TeacherSearchFilter) string {
+	v := url.Values{}
+	if f.Query != "" {
+		v.Set("q", f.Query)
+	}
+	if f.DepartmentID != nil {
+		v.Set("department_id", f.DepartmentID.String())
+	}
+	return v.Encode()
+}
+
+func hrDeptSelected(sel *uuid.UUID, id uuid.UUID) bool {
+	return sel != nil && *sel == id
+}
+
+templ TeacherForm(title string, teacher *dto.TeacherResponse, formData *HRFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, teacherFormContent(title, teacher, formData, csrf))
+}
+
+templ teacherFormContent(title string, teacher *dto.TeacherResponse, formData *HRFormData, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ teacherFormAction(teacher) } enctype="multipart/form-data" class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<div class="grid gap-4 md:grid-cols-2">
+				<input name="first_name" required value={ tFirst(teacher) } placeholder="First name" class="rounded-lg border px-3 py-2"/>
+				<input name="last_name" required value={ tLast(teacher) } placeholder="Last name" class="rounded-lg border px-3 py-2"/>
+				<select name="gender" class="rounded-lg border px-3 py-2">
+					<option value="male" selected?={ tGender(teacher) == "male" }>Male</option>
+					<option value="female" selected?={ tGender(teacher) == "female" }>Female</option>
+				</select>
+				<input type="date" name="date_of_birth" value={ tDOB(teacher) } class="rounded-lg border px-3 py-2"/>
+				<input name="phone" value={ tPhone(teacher) } class="rounded-lg border px-3 py-2"/>
+				<input name="email" value={ tEmail(teacher) } class="rounded-lg border px-3 py-2"/>
+				<input name="national_id" value={ tNID(teacher) } class="rounded-lg border px-3 py-2"/>
+				<input type="date" name="joining_date" required value={ tJoin(teacher) } class="rounded-lg border px-3 py-2"/>
+				<input type="file" name="photo" accept="image/*" class="text-sm"/>
+				<select name="department_id" class="rounded-lg border px-3 py-2">
+					<option value="">Department</option>
+					for _, d := range formData.Departments {
+						<option value={ d.ID.String() } selected?={ tDept(teacher, d.ID) }>{ d.Name }</option>
+					}
+				</select>
+				<select name="designation_id" class="rounded-lg border px-3 py-2">
+					<option value="">Designation</option>
+					for _, d := range formData.Designations {
+						<option value={ d.ID.String() } selected?={ tDesig(teacher, d.ID) }>{ d.Name }</option>
+					}
+				</select>
+				<select name="employment_type" class="rounded-lg border px-3 py-2">
+					<option value="full_time" selected?={ tEmp(teacher) == "full_time" }>Full Time</option>
+					<option value="part_time" selected?={ tEmp(teacher) == "part_time" }>Part Time</option>
+					<option value="contract" selected?={ tEmp(teacher) == "contract" }>Contract</option>
+				</select>
+				<select name="status" class="rounded-lg border px-3 py-2">
+					<option value="active" selected?={ tStatus(teacher) == "active" }>Active</option>
+					<option value="inactive" selected?={ tStatus(teacher) == "inactive" }>Inactive</option>
+					<option value="resigned" selected?={ tStatus(teacher) == "resigned" }>Resigned</option>
+				</select>
+				<input name="salary" type="number" step="0.01" value={ tSalary(teacher) } placeholder="Salary" class="rounded-lg border px-3 py-2"/>
+			</div>
+			<input name="qualification" value={ tQual(teacher) } placeholder="Qualification" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="experience" placeholder="Experience" class="w-full rounded-lg border px-3 py-2">{ tExp(teacher) }</textarea>
+			<textarea name="address" class="w-full rounded-lg border px-3 py-2">{ tAddr(teacher) }</textarea>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-6 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func teacherFormAction(t *dto.TeacherResponse) string {
+	if t == nil { return "/teachers" }
+	return "/teachers/" + t.ID.String()
+}
+func tFirst(t *dto.TeacherResponse) string { if t == nil { return "" }; return t.FirstName }
+func tLast(t *dto.TeacherResponse) string { if t == nil { return "" }; return t.LastName }
+func tGender(t *dto.TeacherResponse) string { if t == nil { return "male" }; return t.Gender }
+func tDOB(t *dto.TeacherResponse) string {
+	if t == nil || t.DateOfBirth == nil { return "" }
+	return t.DateOfBirth.Format("2006-01-02")
+}
+func tPhone(t *dto.TeacherResponse) string { if t == nil { return "" }; return t.Phone }
+func tEmail(t *dto.TeacherResponse) string { if t == nil { return "" }; return t.Email }
+func tNID(t *dto.TeacherResponse) string { if t == nil { return "" }; return t.NationalID }
+func tJoin(t *dto.TeacherResponse) string {
+	if t == nil { return time.Now().Format("2006-01-02") }
+	return t.JoiningDate.Format("2006-01-02")
+}
+func tDept(t *dto.TeacherResponse, id uuid.UUID) bool { return t != nil && t.DepartmentID != nil && *t.DepartmentID == id }
+func tDesig(t *dto.TeacherResponse, id uuid.UUID) bool { return t != nil && t.DesignationID != nil && *t.DesignationID == id }
+func tEmp(t *dto.TeacherResponse) string { if t == nil { return "full_time" }; return t.EmploymentType }
+func tStatus(t *dto.TeacherResponse) string { if t == nil { return "active" }; return t.Status }
+func tSalary(t *dto.TeacherResponse) string {
+	if t == nil || t.Salary == 0 { return "" }
+	return strconv.FormatFloat(t.Salary, 'f', 2, 64)
+}
+func tQual(t *dto.TeacherResponse) string { if t == nil { return "" }; return t.Qualification }
+func tExp(t *dto.TeacherResponse) string { if t == nil { return "" }; return t.Experience }
+func tAddr(t *dto.TeacherResponse) string { if t == nil { return "" }; return t.Address }
+
+templ TeacherProfile(teacher *dto.TeacherResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Teacher Profile", csrf, user, teacherProfileContent(teacher, csrf))
+}
+
+templ teacherProfileContent(teacher *dto.TeacherResponse, csrf string) {
+	<div>
+		<div class="flex flex-wrap items-start justify-between gap-4">
+			<div>
+				<h1 class="text-2xl font-bold">{ teacher.FullName }</h1>
+				<p class="text-slate-500">{ teacher.EmployeeID } · { teacher.DesignationName }</p>
+			</div>
+			<div class="flex gap-2">
+				<a href={ templ.SafeURL("/teachers/" + teacher.ID.String() + "/edit") } class="rounded-lg border px-3 py-2 text-sm">Edit</a>
+				<a href={ templ.SafeURL("/teachers/" + teacher.ID.String() + "/assign") } class="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">Assignments</a>
+			</div>
+		</div>
+		<div class="mt-6 grid gap-6 lg:grid-cols-2">
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Professional</h2>
+				<dl class="mt-3 space-y-1 text-sm">
+					<div>Department: { teacher.DepartmentName }</div>
+					<div>Employment: { teacher.EmploymentType }</div>
+					<div>Joined: { teacher.JoiningDate.Format("Jan 02, 2006") }</div>
+					<div>Qualification: { teacher.Qualification }</div>
+				</dl>
+			</div>
+			<div class="rounded-xl border bg-white p-6">
+				<h2 class="font-semibold">Assignments</h2>
+				<ul class="mt-3 space-y-1 text-sm">
+					for _, a := range teacher.Assignments {
+						<li>{ a.SubjectName } · { a.ClassName } · { a.SectionName }</li>
+					}
+					if len(teacher.Assignments) == 0 {
+						<li class="text-slate-500">No assignments yet.</li>
+					}
+				</ul>
+			</div>
+			<div class="rounded-xl border bg-white p-6 lg:col-span-2">
+				<h2 class="font-semibold">Documents</h2>
+				<ul class="mt-2 text-sm">
+					for _, d := range teacher.Documents {
+						<li><a href={ d.FileURL } target="_blank" class="text-indigo-600">{ d.DocType }: { d.FileName }</a></li>
+					}
+				</ul>
+				<form method="POST" action={ templ.SafeURL("/teachers/" + teacher.ID.String() + "/documents") } enctype="multipart/form-data" class="mt-4 flex gap-2">
+					@components.CSRFInput(csrf)
+					<select name="doc_type" class="rounded border px-2 py-1 text-sm">
+						<option value="nid">NID</option><option value="certificate">Certificate</option>
+						<option value="cv">CV</option><option value="appointment_letter">Appointment Letter</option>
+					</select>
+					<input type="file" name="document" required class="text-sm"/>
+					<button type="submit" class="rounded bg-indigo-600 px-3 py-1 text-sm text-white">Upload</button>
+				</form>
+			</div>
+		</div>
+	</div>
+}
+
+templ TeacherAssign(teacher *dto.TeacherResponse, formData *HRFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Assign Teacher", csrf, user, teacherAssignContent(teacher, formData, csrf))
+}
+
+templ teacherAssignContent(teacher *dto.TeacherResponse, formData *HRFormData, csrf string) {
+	<div class="max-w-3xl">
+		<h1 class="text-2xl font-bold">Assign: { teacher.FullName }</h1>
+		<form method="POST" action={ templ.SafeURL("/teachers/" + teacher.ID.String() + "/assign") } class="mt-6 space-y-6 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<div>
+				<p class="mb-2 font-medium">Subjects</p>
+				<div class="grid gap-2 sm:grid-cols-2">
+					for _, s := range formData.Subjects {
+						<label class="flex items-center gap-2 rounded border px-3 py-2 text-sm">
+							<input type="checkbox" name="subject_ids" value={ s.ID.String() } checked?={ assignedSubject(teacher, s.ID) }/>
+							{ s.Name }
+						</label>
+					}
+				</div>
+			</div>
+			<div>
+				<p class="mb-2 font-medium">Classes</p>
+				<div class="grid gap-2 sm:grid-cols-2">
+					for _, c := range formData.Classes {
+						<label class="flex items-center gap-2 rounded border px-3 py-2 text-sm">
+							<input type="checkbox" name="class_ids" value={ c.ID.String() } checked?={ assignedClass(teacher, c.ID) }/>
+							{ c.Name }
+						</label>
+					}
+				</div>
+			</div>
+			<div>
+				<p class="mb-2 font-medium">Sections</p>
+				<div class="grid gap-2 sm:grid-cols-2">
+					for _, s := range formData.Sections {
+						<label class="flex items-center gap-2 rounded border px-3 py-2 text-sm">
+							<input type="checkbox" name="section_ids" value={ s.ID.String() } checked?={ assignedSection(teacher, s.ID) }/>
+							{ s.ClassName } - { s.Name }
+						</label>
+					}
+				</div>
+			</div>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save Assignments</button>
+		</form>
+	</div>
+}
+
+func assignedSubject(t *dto.TeacherResponse, id uuid.UUID) bool {
+	for _, a := range t.Assignments {
+		if a.SubjectID != nil && *a.SubjectID == id { return true }
+	}
+	return false
+}
+func assignedClass(t *dto.TeacherResponse, id uuid.UUID) bool {
+	for _, a := range t.Assignments {
+		if a.ClassID != nil && *a.ClassID == id { return true }
+	}
+	return false
+}
+func assignedSection(t *dto.TeacherResponse, id uuid.UUID) bool {
+	for _, a := range t.Assignments {
+		if a.SectionID != nil && *a.SectionID == id { return true }
+	}
+	return false
+}
+
+templ StaffList(data *dto.PaginatedStaff, filter dto.StaffSearchFilter, formData *HRFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Staff Directory", csrf, user, staffListContent(data, filter, formData))
+}
+
+templ staffListContent(data *dto.PaginatedStaff, filter dto.StaffSearchFilter, formData *HRFormData) {
+	<div>
+		<div class="flex flex-wrap items-center justify-between gap-3">
+			<h1 class="text-2xl font-bold">Staff Directory</h1>
+			<div class="flex gap-2">
+				<a href="/reports/hr/staff/export.csv" class="rounded-lg border px-3 py-2 text-sm">CSV</a>
+				<a href="/reports/hr/staff/export.xlsx" class="rounded-lg border px-3 py-2 text-sm">Excel</a>
+				<a href="/staff/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Add Staff</a>
+			</div>
+		</div>
+		<form method="GET" class="mt-4 flex gap-2">
+			<input name="q" value={ filter.Query } placeholder="Search..." class="rounded-lg border px-3 py-2 text-sm"/>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-sm text-white">Search</button>
+		</form>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">ID</th><th class="px-4 py-3 text-left">Name</th>
+					<th class="px-4 py-3 text-left">Department</th><th class="px-4 py-3 text-left">Status</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, s := range data.Items {
+						<tr class="hover:bg-slate-50">
+							<td class="px-4 py-3"><a href={ templ.SafeURL("/staff/" + s.ID.String()) } class="font-mono text-xs text-indigo-600">{ s.EmployeeID }</a></td>
+							<td class="px-4 py-3">{ s.FullName }</td>
+							<td class="px-4 py-3">{ s.DepartmentName }</td>
+							<td class="px-4 py-3">{ s.Status }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ StaffForm(title string, staff *dto.StaffResponse, formData *HRFormData, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, staffFormContent(title, staff, formData, csrf))
+}
+
+templ staffFormContent(title string, staff *dto.StaffResponse, formData *HRFormData, csrf string) {
+	<div class="max-w-2xl">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ staffFormAction(staff) } enctype="multipart/form-data" class="mt-6 grid gap-4 rounded-xl border bg-white p-6 md:grid-cols-2">
+			@components.CSRFInput(csrf)
+			<input name="first_name" required value={ sFirst(staff) } placeholder="First name" class="rounded-lg border px-3 py-2"/>
+			<input name="last_name" required value={ sLast(staff) } placeholder="Last name" class="rounded-lg border px-3 py-2"/>
+			<input name="phone" value={ sPhone(staff) } class="rounded-lg border px-3 py-2"/>
+			<input name="email" value={ sEmail(staff) } class="rounded-lg border px-3 py-2"/>
+			<input type="date" name="joining_date" required value={ sJoin(staff) } class="rounded-lg border px-3 py-2"/>
+			<input type="file" name="photo" class="text-sm"/>
+			<select name="department_id" class="rounded-lg border px-3 py-2">
+				for _, d := range formData.Departments {
+					<option value={ d.ID.String() } selected?={ sDept(staff, d.ID) }>{ d.Name }</option>
+				}
+			</select>
+			<select name="designation_id" class="rounded-lg border px-3 py-2">
+				for _, d := range formData.Designations {
+					<option value={ d.ID.String() } selected?={ sDesig(staff, d.ID) }>{ d.Name }</option>
+				}
+			</select>
+			<input name="salary" type="number" step="0.01" value={ sSalary(staff) } class="rounded-lg border px-3 py-2"/>
+			<select name="status" class="rounded-lg border px-3 py-2">
+				<option value="active" selected?={ sStatus(staff) == "active" }>Active</option>
+				<option value="inactive" selected?={ sStatus(staff) == "inactive" }>Inactive</option>
+				<option value="resigned" selected?={ sStatus(staff) == "resigned" }>Resigned</option>
+			</select>
+			<textarea name="address" class="md:col-span-2 rounded-lg border px-3 py-2">{ sAddr(staff) }</textarea>
+			<button type="submit" class="md:col-span-2 rounded-lg bg-indigo-600 px-6 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func staffFormAction(s *dto.StaffResponse) string {
+	if s == nil { return "/staff" }
+	return "/staff/" + s.ID.String()
+}
+func sFirst(s *dto.StaffResponse) string { if s == nil { return "" }; return s.FirstName }
+func sLast(s *dto.StaffResponse) string { if s == nil { return "" }; return s.LastName }
+func sPhone(s *dto.StaffResponse) string { if s == nil { return "" }; return s.Phone }
+func sEmail(s *dto.StaffResponse) string { if s == nil { return "" }; return s.Email }
+func sJoin(s *dto.StaffResponse) string {
+	if s == nil { return time.Now().Format("2006-01-02") }
+	return s.JoiningDate.Format("2006-01-02")
+}
+func sDept(s *dto.StaffResponse, id uuid.UUID) bool { return s != nil && s.DepartmentID != nil && *s.DepartmentID == id }
+func sDesig(s *dto.StaffResponse, id uuid.UUID) bool { return s != nil && s.DesignationID != nil && *s.DesignationID == id }
+func sSalary(s *dto.StaffResponse) string {
+	if s == nil || s.Salary == 0 { return "" }
+	return strconv.FormatFloat(s.Salary, 'f', 2, 64)
+}
+func sStatus(s *dto.StaffResponse) string { if s == nil { return "active" }; return s.Status }
+func sAddr(s *dto.StaffResponse) string { if s == nil { return "" }; return s.Address }
+
+templ StaffProfile(staff *dto.StaffResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Staff Profile", csrf, user, staffProfileContent(staff, csrf))
+}
+
+templ staffProfileContent(staff *dto.StaffResponse, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">{ staff.FullName }</h1>
+		<p class="text-slate-500">{ staff.EmployeeID } · { staff.DesignationName }</p>
+		<div class="mt-6 rounded-xl border bg-white p-6">
+			<dl class="space-y-1 text-sm">
+				<div>Department: { staff.DepartmentName }</div>
+				<div>Phone: { staff.Phone }</div>
+				<div>Email: { staff.Email }</div>
+				<div>Joined: { staff.JoiningDate.Format("Jan 02, 2006") }</div>
+			</dl>
+			<form method="POST" action={ templ.SafeURL("/staff/" + staff.ID.String() + "/documents") } enctype="multipart/form-data" class="mt-4 flex gap-2">
+				@components.CSRFInput(csrf)
+				<select name="doc_type" class="rounded border px-2 py-1 text-sm">
+					<option value="nid">NID</option><option value="cv">CV</option>
+				</select>
+				<input type="file" name="document" required class="text-sm"/>
+				<button type="submit" class="rounded bg-indigo-600 px-3 py-1 text-sm text-white">Upload</button>
+			</form>
+		</div>
+	</div>
+}
+
+templ TeacherPortal(dash *dto.TeacherPortalDashboard, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Teacher Dashboard", csrf, user, teacherPortalContent(dash))
+}
+
+templ teacherPortalContent(dash *dto.TeacherPortalDashboard) {
+	<div>
+		<h1 class="text-2xl font-bold">Welcome, { dash.Teacher.FirstName }</h1>
+		<div class="mt-6 grid gap-4 sm:grid-cols-3">
+			@components.StatCard("Assigned Classes", strconv.Itoa(dash.AssignedClasses), "text-indigo-600")
+			@components.StatCard("Assigned Subjects", strconv.Itoa(dash.AssignedSubjects), "text-emerald-600")
+			@components.StatCard("Today's Classes", strconv.Itoa(len(dash.TodaySchedule)), "text-violet-600")
+		</div>
+		<div class="mt-8 rounded-xl border bg-white p-6">
+			<h2 class="font-semibold">Today's Schedule</h2>
+			if len(dash.TodaySchedule) == 0 {
+				<p class="mt-3 text-sm text-slate-500">No classes scheduled for today.</p>
+			} else {
+				<ul class="mt-3 space-y-2 text-sm">
+					for _, s := range dash.TodaySchedule {
+						<li>{ s.StartTime }–{ s.EndTime }: { s.SubjectName } ({ s.ClassName } { s.SectionName }) { s.Room }</li>
+					}
+				</ul>
+			}
+		</div>
+	</div>
+}
+
+type DepartmentReportGroup struct {
+	Department dto.DepartmentResponse
+	Teachers   []dto.TeacherResponse
+	Staff      []dto.StaffResponse
+}
+
+templ HRTeacherReport(teachers []dto.TeacherResponse, filter dto.HRReportFilter, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Teacher List Report", csrf, user, hrTeacherReportContent(teachers))
+}
+
+templ hrTeacherReportContent(teachers []dto.TeacherResponse) {
+	<div>
+		<h1 class="text-2xl font-bold">Teacher List Report</h1>
+		<p class="text-sm text-slate-500">{ strconv.Itoa(len(teachers)) } records</p>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-3 text-left">ID</th><th class="px-4 py-3 text-left">Name</th>
+					<th class="px-4 py-3 text-left">Department</th><th class="px-4 py-3 text-left">Designation</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					for _, t := range teachers {
+						<tr><td class="px-4 py-3">{ t.EmployeeID }</td><td class="px-4 py-3">{ t.FullName }</td>
+						<td class="px-4 py-3">{ t.DepartmentName }</td><td class="px-4 py-3">{ t.DesignationName }</td></tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ HRStaffReport(staff []dto.StaffResponse, filter dto.HRReportFilter, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Staff List Report", csrf, user, hrStaffReportContent(staff))
+}
+
+templ hrStaffReportContent(staff []dto.StaffResponse) {
+	<div>
+		<h1 class="text-2xl font-bold">Staff List Report</h1>
+		<div class="mt-4 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<tbody class="divide-y">
+					for _, s := range staff {
+						<tr><td class="px-4 py-3">{ s.EmployeeID }</td><td class="px-4 py-3">{ s.FullName }</td>
+						<td class="px-4 py-3">{ s.DepartmentName }</td></tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ DepartmentReport(groups []DepartmentReportGroup, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Department Report", csrf, user, deptReportContent(groups))
+}
+
+templ deptReportContent(groups []DepartmentReportGroup) {
+	<div>
+		<h1 class="text-2xl font-bold">Department Wise Report</h1>
+		for _, g := range groups {
+			<div class="mt-6 rounded-xl border bg-white p-4">
+				<h2 class="font-semibold">{ g.Department.Name }</h2>
+				<p class="text-sm text-slate-500">{ strconv.Itoa(len(g.Teachers)) } teachers · { strconv.Itoa(len(g.Staff)) } staff</p>
+			</div>
+		}
+	</div>
+}
+
+templ AssignmentReport(teachers []dto.TeacherResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Assignment Report", csrf, user, assignReportContent(teachers))
+}
+
+templ assignReportContent(teachers []dto.TeacherResponse) {
+	<div>
+		<h1 class="text-2xl font-bold">Teacher Subject Assignment Report</h1>
+		for _, t := range teachers {
+			<div class="mt-4 rounded-xl border bg-white p-4">
+				<h2 class="font-semibold">{ t.FullName } ({ t.EmployeeID })</h2>
+				<ul class="mt-2 text-sm">
+					for _, a := range t.Assignments {
+						<li>{ a.SubjectName } · { a.ClassName } · { a.SectionName }</li>
+					}
+				</ul>
+			</div>
+		}
+	</div>
+}

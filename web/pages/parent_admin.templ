@@ -1,0 +1,280 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+templ ParentAdminList(data *dto.PaginatedParents, students []dto.StudentResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Parents", csrf, user, parentAdminListContent(data, csrf))
+}
+
+templ parentAdminListContent(data *dto.PaginatedParents, csrf string) {
+	<div class="space-y-4">
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Parent Accounts</h1>
+			<a href="/parents/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create Parent</a>
+		</div>
+		<table class="min-w-full rounded-xl border bg-white text-sm shadow-sm">
+			<thead class="bg-slate-50 text-left"><tr><th class="px-4 py-2">Name</th><th class="px-4 py-2">Email</th><th class="px-4 py-2">Children</th><th class="px-4 py-2">Status</th><th class="px-4 py-2"></th></tr></thead>
+			<tbody class="divide-y">
+				for _, p := range data.Items {
+					<tr>
+						<td class="px-4 py-2">{ p.FirstName } { p.LastName }</td>
+						<td class="px-4 py-2">{ p.Email }</td>
+						<td class="px-4 py-2">{ fmt.Sprintf("%d", p.ChildCount) }</td>
+						<td class="px-4 py-2">{ p.IsActive }</td>
+						<td class="px-4 py-2"><a href={ templ.SafeURL("/parents/" + p.ID.String()) } class="text-indigo-600">Manage</a></td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+templ ParentAdminForm(title string, parent *dto.ParentResponse, students []dto.StudentResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, parentAdminFormContent(title, parent, students, csrf))
+}
+
+templ parentAdminFormContent(title string, parent *dto.ParentResponse, students []dto.StudentResponse, csrf string) {
+	<div class="mx-auto max-w-lg space-y-4">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ parentFormAction(parent) } class="space-y-4 rounded-xl border bg-white p-6 shadow-sm">
+			@components.CSRFInput(csrf)
+			if parent == nil {
+				<div><label class="text-sm font-medium">Email</label><input type="email" name="email" required class="mt-1 w-full rounded-lg border px-3 py-2"/></div>
+				<div><label class="text-sm font-medium">Password</label><input type="password" name="password" required class="mt-1 w-full rounded-lg border px-3 py-2"/></div>
+			}
+			<div><label class="text-sm font-medium">First Name</label><input type="text" name="first_name" value={ parentField(parent, "first") } required class="mt-1 w-full rounded-lg border px-3 py-2"/></div>
+			<div><label class="text-sm font-medium">Last Name</label><input type="text" name="last_name" value={ parentField(parent, "last") } required class="mt-1 w-full rounded-lg border px-3 py-2"/></div>
+			<div><label class="text-sm font-medium">Phone</label><input type="text" name="phone" value={ parentField(parent, "phone") } class="mt-1 w-full rounded-lg border px-3 py-2"/></div>
+			<div><label class="text-sm font-medium">Address</label><textarea name="address" class="mt-1 w-full rounded-lg border px-3 py-2">{ parentField(parent, "address") }</textarea></div>
+			<div><label class="text-sm font-medium">Occupation</label><input type="text" name="occupation" value={ parentField(parent, "occupation") } class="mt-1 w-full rounded-lg border px-3 py-2"/></div>
+			if parent == nil {
+				<div><label class="text-sm font-medium">Link Student</label>
+					<select name="student_id" class="mt-1 w-full rounded-lg border px-3 py-2">
+						<option value="">— Select —</option>
+						for _, s := range students {
+							<option value={ s.ID.String() }>{ s.FirstName } { s.LastName } ({ s.AdmissionNumber })</option>
+						}
+					</select>
+				</div>
+				<div><label class="text-sm font-medium">Relationship</label>
+					<select name="relationship" class="mt-1 w-full rounded-lg border px-3 py-2">
+						<option value="father">Father</option>
+						<option value="mother">Mother</option>
+						<option value="guardian">Guardian</option>
+					</select>
+				</div>
+			}
+			if parent != nil {
+				<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_active" checked?={ parent.IsActive }/> Active</label>
+			}
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save</button>
+		</form>
+	</div>
+}
+
+func parentFormAction(parent *dto.ParentResponse) string {
+	if parent == nil {
+		return "/parents"
+	}
+	return "/parents/" + parent.ID.String()
+}
+
+func parentField(parent *dto.ParentResponse, field string) string {
+	if parent == nil {
+		return ""
+	}
+	switch field {
+	case "first":
+		return parent.FirstName
+	case "last":
+		return parent.LastName
+	case "phone":
+		return parent.Phone
+	case "address":
+		return parent.Address
+	case "occupation":
+		return parent.Occupation
+	}
+	return ""
+}
+
+templ ParentAdminDetail(parent *dto.ParentResponse, children []dto.ParentChildResponse, students []dto.StudentResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Parent Detail", csrf, user, parentAdminDetailContent(parent, children, students, csrf))
+}
+
+templ parentAdminDetailContent(parent *dto.ParentResponse, children []dto.ParentChildResponse, students []dto.StudentResponse, csrf string) {
+	<div class="space-y-6">
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">{ parent.FirstName } { parent.LastName }</h1>
+			<a href={ templ.SafeURL("/parents/" + parent.ID.String() + "/edit") } class="text-indigo-600">Edit</a>
+		</div>
+		<p class="text-slate-600">{ parent.Email } · { parent.Phone }</p>
+		<div class="rounded-xl border bg-white p-4 shadow-sm">
+			<h2 class="font-semibold">Linked Children</h2>
+			<ul class="mt-2 divide-y">
+				for _, ch := range children {
+					<li class="flex items-center justify-between py-2 text-sm">
+						<span>{ ch.StudentName } ({ ch.Relationship })</span>
+						<form method="POST" action={ templ.SafeURL("/parents/" + parent.ID.String() + "/unlink-student") }>
+							@components.CSRFInput(csrf)
+							<input type="hidden" name="student_id" value={ ch.StudentID.String() }/>
+							<button type="submit" class="text-red-600">Unlink</button>
+						</form>
+					</li>
+				}
+			</ul>
+			<form method="POST" action={ templ.SafeURL("/parents/" + parent.ID.String() + "/link-student") } class="mt-4 flex gap-2">
+				@components.CSRFInput(csrf)
+				<select name="student_id" class="rounded-lg border px-3 py-2 text-sm">
+					for _, s := range students {
+						<option value={ s.ID.String() }>{ s.FirstName } { s.LastName }</option>
+					}
+				</select>
+				<select name="relationship" class="rounded-lg border px-3 py-2 text-sm">
+					<option value="father">Father</option>
+					<option value="mother">Mother</option>
+					<option value="guardian">Guardian</option>
+				</select>
+				<button type="submit" class="rounded-lg bg-indigo-600 px-3 py-2 text-sm text-white">Link</button>
+			</form>
+		</div>
+	</div>
+}
+
+templ NoticeListPage(data *dto.PaginatedNotices, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Notices", csrf, user, noticeListContent(data))
+}
+
+templ noticeListContent(data *dto.PaginatedNotices) {
+	<div class="space-y-4">
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">School Notices</h1>
+			<a href="/notices/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create Notice</a>
+		</div>
+		<table class="min-w-full rounded-xl border bg-white text-sm shadow-sm">
+			<thead class="bg-slate-50 text-left"><tr><th class="px-4 py-2">Title</th><th class="px-4 py-2">Type</th><th class="px-4 py-2">Published</th><th class="px-4 py-2">Date</th><th class="px-4 py-2"></th></tr></thead>
+			<tbody class="divide-y">
+				for _, n := range data.Items {
+					<tr>
+						<td class="px-4 py-2">{ n.Title }</td>
+						<td class="px-4 py-2 capitalize">{ n.NoticeType }</td>
+						<td class="px-4 py-2">{ n.IsPublished }</td>
+						<td class="px-4 py-2">{ n.PublishAt.Format("2006-01-02") }</td>
+						<td class="px-4 py-2"><a href={ templ.SafeURL("/notices/" + n.ID.String() + "/edit") } class="text-indigo-600">Edit</a></td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+templ NoticeFormPage(title string, notice *dto.NoticeResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, noticeFormContent(title, notice, csrf))
+}
+
+templ noticeFormContent(title string, notice *dto.NoticeResponse, csrf string) {
+	<div class="mx-auto max-w-2xl space-y-4">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ noticeFormAction(notice) } class="space-y-4 rounded-xl border bg-white p-6 shadow-sm">
+			@components.CSRFInput(csrf)
+			<div><label class="text-sm font-medium">Title</label><input type="text" name="title" value={ noticeField(notice, "title") } required class="mt-1 w-full rounded-lg border px-3 py-2"/></div>
+			<div><label class="text-sm font-medium">Body</label><textarea name="body" rows="6" required class="mt-1 w-full rounded-lg border px-3 py-2">{ noticeField(notice, "body") }</textarea></div>
+			<div><label class="text-sm font-medium">Type</label>
+				<select name="notice_type" class="mt-1 w-full rounded-lg border px-3 py-2">
+					<option value="general" selected?={ noticeTypeSelected(notice, "general") }>General</option>
+					<option value="exam" selected?={ noticeTypeSelected(notice, "exam") }>Exam</option>
+					<option value="holiday" selected?={ noticeTypeSelected(notice, "holiday") }>Holiday</option>
+					<option value="fee" selected?={ noticeTypeSelected(notice, "fee") }>Fee</option>
+					<option value="urgent" selected?={ noticeTypeSelected(notice, "urgent") }>Urgent</option>
+				</select>
+			</div>
+			<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_published" checked?={ noticePublished(notice) }/> Publish immediately</label>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save</button>
+			if notice != nil {
+				<button formaction={ templ.SafeURL("/notices/" + notice.ID.String() + "/delete") } formmethod="POST" class="ml-2 rounded-lg border border-red-300 px-4 py-2 text-sm text-red-600">Delete</button>
+			}
+		</form>
+	</div>
+}
+
+func noticeFormAction(notice *dto.NoticeResponse) string {
+	if notice == nil {
+		return "/notices"
+	}
+	return "/notices/" + notice.ID.String()
+}
+
+func noticeField(notice *dto.NoticeResponse, field string) string {
+	if notice == nil {
+		return ""
+	}
+	switch field {
+	case "title":
+		return notice.Title
+	case "body":
+		return notice.Body
+	}
+	return ""
+}
+
+func noticeTypeSelected(notice *dto.NoticeResponse, t string) bool {
+	if notice == nil {
+		return t == "general"
+	}
+	return notice.NoticeType == t
+}
+
+func noticePublished(notice *dto.NoticeResponse) bool {
+	if notice == nil {
+		return true
+	}
+	return notice.IsPublished
+}
+
+templ CommunicationDashboard(stats *dto.CommunicationDashboardStats, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Communication Dashboard", csrf, user, communicationDashboardContent(stats))
+}
+
+templ communicationDashboardContent(stats *dto.CommunicationDashboardStats) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Communication Dashboard</h1>
+		<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+			@components.StatCard("SMS Today", fmt.Sprintf("%d", stats.SMSSentToday), "indigo")
+			@components.StatCard("Emails Today", fmt.Sprintf("%d", stats.EmailsSentToday), "blue")
+			@components.StatCard("Notifications", fmt.Sprintf("%d", stats.NotificationCount), "emerald")
+			@components.StatCard("SMS Success Rate", fmt.Sprintf("%.1f%%", stats.DeliverySuccessRate), "amber")
+		</div>
+		<div class="grid gap-6 lg:grid-cols-2">
+			<div class="rounded-xl border bg-white shadow-sm">
+				<h2 class="border-b px-4 py-3 font-semibold">Recent SMS</h2>
+				<ul class="divide-y text-sm">
+					for _, s := range stats.RecentSMS {
+						<li class="px-4 py-2">
+							<p class="font-medium">{ s.RecipientPhone }</p>
+							<p class="text-slate-600 truncate">{ s.Message }</p>
+							<p class="text-xs text-slate-400">{ s.Status } · { s.EventType }</p>
+						</li>
+					}
+				</ul>
+			</div>
+			<div class="rounded-xl border bg-white shadow-sm">
+				<h2 class="border-b px-4 py-3 font-semibold">Recent Emails</h2>
+				<ul class="divide-y text-sm">
+					for _, e := range stats.RecentEmails {
+						<li class="px-4 py-2">
+							<p class="font-medium">{ e.RecipientEmail }</p>
+							<p class="text-slate-600">{ e.Subject }</p>
+							<p class="text-xs text-slate-400">{ e.Status }</p>
+						</li>
+					}
+				</ul>
+			</div>
+		</div>
+		<a href="/communications/sms/export.csv" class="text-sm text-indigo-600 hover:underline">Export SMS logs (CSV)</a>
+	</div>
+}

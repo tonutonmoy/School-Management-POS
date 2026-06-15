@@ -1,0 +1,17 @@
+.env
+node_modules/
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+tmp/
+uploads/
+web/static/css/app.css.map
+*.templ.go
+vendor/
+.idea/
+.vscode/
+*.log
+coverage.out

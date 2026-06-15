@@ -1,0 +1,96 @@
+package layouts
+
+import (
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/internal/i18n"
+	"github.com/school-management/pos/web/components"
+)
+
+templ Base(title, csrf string, user *dto.AuthUser, content templ.Component) {
+	<!DOCTYPE html>
+	<html lang={ i18n.Current().HTMLLang() } class="h-full">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<meta name="csrf-token" content={ csrf }/>
+			<title>{ i18n.CurrentPageTitle(title) } · { i18n.TC("app.name") }</title>
+			<link rel="preconnect" href="/static"/>
+			<link rel="preload" href="/static/css/app.css" as="style"/>
+			<link href="/static/css/app.css" rel="stylesheet"/>
+			<script src="/static/js/htmx.min.js" defer></script>
+			<script src="/static/js/app.js" defer></script>
+		</head>
+		<body class="min-h-screen bg-slate-50 font-sans text-slate-900 antialiased">
+			@components.PageLoader()
+			if user != nil {
+				<div id="sidebar-overlay" class="fixed inset-0 z-30 hidden bg-slate-900/50 lg:hidden" aria-hidden="true"></div>
+				<aside id="sidebar" class="fixed inset-y-0 left-0 z-40 flex w-64 -translate-x-full flex-col border-r border-slate-800 bg-slate-900 text-white transition-transform duration-200 ease-out lg:translate-x-0">
+					<div class="flex h-16 shrink-0 items-center gap-3 border-b border-slate-800 px-5">
+						<div class="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-sm font-bold">SP</div>
+						<div class="min-w-0">
+							<p class="truncate text-sm font-semibold">{ i18n.TC("app.name") }</p>
+							<p class="truncate text-xs text-slate-400">{ i18n.TC("app.tagline") }</p>
+						</div>
+					</div>
+					@components.AdminSidebar(title)
+					<div class="shrink-0 border-t border-slate-800 p-4">
+						<div class="mb-3 truncate text-xs text-slate-400">
+							@components.UserBadge(user)
+						</div>
+						<div class="mb-3 flex justify-center">
+							@components.LanguageSwitcher()
+						</div>
+						<div class="flex gap-2">
+							<a href="/change-password" class="flex-1 rounded-lg border border-slate-700 px-2 py-1.5 text-center text-xs text-slate-300 hover:bg-slate-800">{ i18n.TC("ui.password") }</a>
+							<form method="POST" action="/logout" class="flex-1">
+								@components.CSRFInput(csrf)
+								<button type="submit" class="w-full rounded-lg bg-slate-700 px-2 py-1.5 text-xs font-medium text-white hover:bg-slate-600">{ i18n.TC("ui.logout") }</button>
+							</form>
+						</div>
+					</div>
+				</aside>
+				<div class="flex min-h-screen flex-col lg:pl-64">
+					<header class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur sm:px-6">
+						<button id="sidebar-toggle" type="button" class="rounded-lg p-2 text-slate-600 hover:bg-slate-100 lg:hidden" aria-label={ i18n.TC("ui.open_menu") }>
+							<svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+						</button>
+						<h1 class="min-w-0 flex-1 truncate text-base font-semibold text-slate-800 sm:text-lg">{ i18n.CurrentPageTitle(title) }</h1>
+						<div class="hidden sm:block">
+							@components.LanguageSwitcher()
+						</div>
+					</header>
+					<main class="flex-1 p-4 sm:p-6 lg:p-8">
+						@content
+					</main>
+				</div>
+			} else {
+				<main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+					@content
+				</main>
+			}
+		</body>
+	</html>
+}
+
+templ AuthLayout(title, csrf string, content templ.Component) {
+	<!DOCTYPE html>
+	<html lang={ i18n.Current().HTMLLang() } class="h-full">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<meta name="csrf-token" content={ csrf }/>
+			<title>{ i18n.CurrentPageTitle(title) } · { i18n.TC("app.name") }</title>
+			<link rel="preload" href="/static/css/app.css" as="style"/>
+			<link href="/static/css/app.css" rel="stylesheet"/>
+			<script src="/static/js/app.js" defer></script>
+		</head>
+		<body class="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-4 font-sans antialiased">
+			<div class="w-full max-w-md rounded-2xl border border-white/10 bg-white/95 p-8 shadow-2xl backdrop-blur">
+				<div class="mb-6 flex justify-end">
+					@components.LanguageSwitcher()
+				</div>
+				@content
+			</div>
+		</body>
+	</html>
+}

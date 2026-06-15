@@ -1,0 +1,514 @@
+package pages
+
+import (
+	"fmt"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+templ PublicSiteHome(data *dto.PublicSiteData) {
+	if data != nil && data.Settings != nil {
+		@layouts.PublicLayout(data.Settings.SiteName, data.Settings.DefaultMetaDescription, "", data.Settings, publicHomeContent(data))
+	} else {
+		@layouts.PublicLayout("Home", "", "", nil, publicHomeContent(data))
+	}
+}
+
+templ publicHomeContent(data *dto.PublicSiteData) {
+	<div>
+		if data != nil {
+			for _, b := range data.Banners {
+				<div class="relative bg-indigo-900 text-white">
+					if b.ImageURL != "" {
+						<img src={ b.ImageURL } alt={ b.Title } class="h-64 w-full object-cover opacity-60 md:h-96"/>
+					}
+					<div class="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
+						<h1 class="text-3xl font-bold md:text-5xl">{ b.Title }</h1>
+						if b.Subtitle != "" {
+							<p class="mt-2 text-lg">{ b.Subtitle }</p>
+						}
+						<a href="/admission/apply" class="mt-6 rounded-lg bg-white px-6 py-3 font-medium text-indigo-900">Apply Now</a>
+					</div>
+				</div>
+			}
+		}
+		<div class="mx-auto max-w-7xl px-4 py-12">
+			<div class="grid gap-8 md:grid-cols-2">
+				<div>
+					<h2 class="text-2xl font-bold">Latest News</h2>
+					if data != nil {
+						for _, n := range data.News {
+							<a href={ templ.SafeURL("/site/news/" + n.Slug) } class="mt-3 block rounded-lg border p-4 hover:border-indigo-300">
+								<h3 class="font-semibold">{ n.Title }</h3>
+								<p class="text-sm text-slate-600">{ n.Excerpt }</p>
+							</a>
+						}
+					}
+				</div>
+				<div>
+					<h2 class="text-2xl font-bold">Upcoming Events</h2>
+					if data != nil {
+						for _, e := range data.Events {
+							<div class="mt-3 rounded-lg border p-4">
+								<h3 class="font-semibold">{ e.Title }</h3>
+								<p class="text-sm text-slate-500">{ e.EventDate.Format("02 Jan 2006") } · { e.Location }</p>
+							</div>
+						}
+					}
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+templ PublicSitePageView(page *dto.WebsitePageResponse, settings *dto.WebsiteSettingsResponse) {
+	@layouts.PublicLayout(page.Title, page.MetaDescription, "", settings, publicPageContent(page))
+}
+
+templ publicPageContent(page *dto.WebsitePageResponse) {
+	<div class="mx-auto max-w-4xl px-4 py-12">
+		<h1 class="text-3xl font-bold">{ page.Title }</h1>
+		<div class="prose mt-6 max-w-none whitespace-pre-wrap">{ page.Content }</div>
+		for _, b := range page.Blocks {
+			<div class="mt-8 rounded-xl border p-6">
+				if b.Title != "" {
+					<h2 class="text-xl font-semibold">{ b.Title }</h2>
+				}
+				<div class="mt-2 prose">{ b.Content }</div>
+			</div>
+		}
+	</div>
+}
+
+templ PublicNewsListPage(data *dto.PaginatedNews, settings *dto.WebsiteSettingsResponse) {
+	@layouts.PublicLayout("News", "", "", settings, publicNewsList(data))
+}
+
+templ publicNewsList(data *dto.PaginatedNews) {
+	<div class="mx-auto max-w-4xl px-4 py-12 space-y-4">
+		<h1 class="text-3xl font-bold">News & Announcements</h1>
+		if data != nil {
+			for _, n := range data.Items {
+				<a href={ templ.SafeURL("/site/news/" + n.Slug) } class="block rounded-xl border p-5 hover:border-indigo-300">
+					<h2 class="text-xl font-semibold">{ n.Title }</h2>
+					<p class="text-sm text-slate-500">{ n.CreatedAt.Format("02 Jan 2006") }</p>
+					<p class="mt-2 text-slate-600">{ n.Excerpt }</p>
+				</a>
+			}
+		}
+	</div>
+}
+
+templ PublicNewsDetailPage(news *dto.NewsResponse, settings *dto.WebsiteSettingsResponse) {
+	@layouts.PublicLayout(news.Title, news.MetaDescription, "", settings, publicNewsDetail(news))
+}
+
+templ publicNewsDetail(news *dto.NewsResponse) {
+	<article class="mx-auto max-w-4xl px-4 py-12">
+		<h1 class="text-3xl font-bold">{ news.Title }</h1>
+		<p class="text-slate-500">{ news.CreatedAt.Format("02 Jan 2006") }</p>
+		<div class="prose mt-6 max-w-none whitespace-pre-wrap">{ news.Body }</div>
+	</article>
+}
+
+templ PublicEventsListPage(data *dto.PaginatedEvents, settings *dto.WebsiteSettingsResponse) {
+	@layouts.PublicLayout("Events", "", "", settings, publicEventsList(data))
+}
+
+templ publicEventsList(data *dto.PaginatedEvents) {
+	<div class="mx-auto max-w-4xl px-4 py-12 space-y-4">
+		<h1 class="text-3xl font-bold">Events</h1>
+		if data != nil {
+			for _, e := range data.Items {
+				<div class="rounded-xl border p-5">
+					<h2 class="text-xl font-semibold">{ e.Title }</h2>
+					<p class="text-sm text-indigo-600">{ e.EventDate.Format("02 Jan 2006 15:04") }</p>
+					<p class="text-slate-600">{ e.Location }</p>
+					<p class="mt-2">{ e.Description }</p>
+				</div>
+			}
+		}
+	</div>
+}
+
+templ PublicDownloadsPage(downloads []dto.DownloadResponse, settings *dto.WebsiteSettingsResponse) {
+	@layouts.PublicLayout("Downloads", "", "", settings, publicDownloadsList(downloads))
+}
+
+templ publicDownloadsList(downloads []dto.DownloadResponse) {
+	<div class="mx-auto max-w-4xl px-4 py-12">
+		<h1 class="text-3xl font-bold">Downloads</h1>
+		<ul class="mt-6 divide-y rounded-xl border">
+			for _, d := range downloads {
+				<li class="flex items-center justify-between px-4 py-4">
+					<div>
+						<p class="font-medium">{ d.Title }</p>
+						<p class="text-xs capitalize text-slate-500">{ d.Category }</p>
+					</div>
+					<a href={ templ.SafeURL("/site/downloads/" + d.Slug + "/file") } class="text-indigo-600 text-sm">Download</a>
+				</li>
+			}
+		</ul>
+	</div>
+}
+
+templ PublicGalleryPage(gallery []dto.WebsiteGalleryResponse, settings *dto.WebsiteSettingsResponse) {
+	@layouts.PublicLayout("Gallery", "", "", settings, publicGalleryGrid(gallery))
+}
+
+templ publicGalleryGrid(gallery []dto.WebsiteGalleryResponse) {
+	<div class="mx-auto max-w-7xl px-4 py-12">
+		<h1 class="text-3xl font-bold">Photo Gallery</h1>
+		<div class="mt-8 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
+			for _, g := range gallery {
+				if g.IsActive {
+					<div class="overflow-hidden rounded-xl border">
+						<img src={ g.ImageURL } alt={ g.Title } class="h-48 w-full object-cover"/>
+						<p class="p-3 text-sm font-medium">{ g.Title }</p>
+					</div>
+				}
+			}
+		</div>
+	</div>
+}
+
+templ PublicContactPage(settings *dto.WebsiteSettingsResponse, flash, flashType, csrf string) {
+	@layouts.PublicLayout("Contact", "", csrf, settings, publicContactContent(settings, flash, flashType, csrf))
+}
+
+templ publicContactContent(settings *dto.WebsiteSettingsResponse, flash, flashType, csrf string) {
+	<div class="mx-auto max-w-xl px-4 py-12">
+		<h1 class="text-3xl font-bold">Contact Us</h1>
+		@layouts.PublicFlash(flash, flashType)
+		<form method="POST" action="/site/contact" class="mt-6 space-y-4">
+			@components.CSRFInput(csrf)
+			<input type="text" name="name" placeholder="Your Name" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="email" name="email" placeholder="Email" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="phone" placeholder="Phone" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="subject" placeholder="Subject" required class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="message" rows="5" placeholder="Message" required class="w-full rounded-lg border px-3 py-2"></textarea>
+			<button type="submit" class="w-full rounded-lg bg-indigo-600 py-2 text-white">Send Message</button>
+		</form>
+	</div>
+}
+
+templ WebsiteDashboard(stats *dto.WebsiteDashboardStats, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Website Dashboard", csrf, user, websiteDashboardContent(stats))
+}
+
+templ websiteDashboardContent(stats *dto.WebsiteDashboardStats) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Website & Admission Analytics</h1>
+		if stats != nil {
+			<div class="grid gap-4 sm:grid-cols-3">
+				@components.StatCard("Applications", fmt.Sprintf("%d", stats.AdmissionApplications), "indigo")
+				@components.StatCard("Visitors Today", fmt.Sprintf("%d", stats.WebsiteVisitors), "blue")
+				@components.StatCard("Inquiries", fmt.Sprintf("%d", stats.ContactInquiries), "emerald")
+				@components.StatCard("New Inquiries", fmt.Sprintf("%d", stats.NewContacts), "amber")
+				@components.StatCard("Pending Admissions", fmt.Sprintf("%d", stats.PendingAdmissions), "red")
+			</div>
+		}
+		<div class="flex flex-wrap gap-2 text-sm">
+			<a href="/website/pages" class="rounded-lg border px-4 py-2">Pages</a>
+			<a href="/website/banners" class="rounded-lg border px-4 py-2">Banners</a>
+			<a href="/website/gallery" class="rounded-lg border px-4 py-2">Gallery</a>
+			<a href="/website/news" class="rounded-lg border px-4 py-2">News</a>
+			<a href="/website/events" class="rounded-lg border px-4 py-2">Events</a>
+			<a href="/website/downloads" class="rounded-lg border px-4 py-2">Downloads</a>
+			<a href="/website/contacts" class="rounded-lg border px-4 py-2">Inquiries</a>
+			<a href="/website/settings" class="rounded-lg border px-4 py-2">Settings</a>
+			<a href="/site" target="_blank" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">View Site</a>
+		</div>
+	</div>
+}
+
+templ WebsiteSettingsForm(settings *dto.WebsiteSettingsResponse, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Website Settings", csrf, user, websiteSettingsContent(settings, flash, flashType, csrf))
+}
+
+templ websiteSettingsContent(settings *dto.WebsiteSettingsResponse, flash, flashType, csrf string) {
+	<div class="mx-auto max-w-2xl space-y-4">
+		<h1 class="text-2xl font-bold">Website Settings</h1>
+		@components.Flash(flash, flashType)
+		<form method="POST" action="/website/settings" enctype="multipart/form-data" class="space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input type="text" name="site_name" value={ settingsField(settings, "name") } placeholder="Site Name" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="tagline" value={ settingsField(settings, "tagline") } placeholder="Tagline" class="w-full rounded-lg border px-3 py-2"/>
+			<div class="grid gap-3 sm:grid-cols-2">
+				<input type="color" name="primary_color" value={ settingsField(settings, "primary") } class="h-10 w-full rounded border"/>
+				<input type="color" name="secondary_color" value={ settingsField(settings, "secondary") } class="h-10 w-full rounded border"/>
+			</div>
+			<input type="file" name="logo" accept="image/*" class="text-sm"/>
+			<input type="file" name="favicon" accept="image/*" class="text-sm"/>
+			<input type="text" name="contact_email" value={ settingsField(settings, "email") } placeholder="Contact Email" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="contact_phone" value={ settingsField(settings, "phone") } placeholder="Contact Phone" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="contact_address" class="w-full rounded-lg border px-3 py-2">{ settingsField(settings, "address") }</textarea>
+			<input type="text" name="default_meta_title" value={ settingsField(settings, "meta_title") } placeholder="Default Meta Title" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="default_meta_description" placeholder="Meta Description" class="w-full rounded-lg border px-3 py-2">{ settingsField(settings, "meta_desc") }</textarea>
+			<input type="url" name="facebook_url" value={ settingsField(settings, "facebook") } placeholder="Facebook URL" class="w-full rounded-lg border px-3 py-2"/>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save Settings</button>
+		</form>
+	</div>
+}
+
+func settingsField(s *dto.WebsiteSettingsResponse, field string) string {
+	if s == nil {
+		return ""
+	}
+	switch field {
+	case "name":
+		return s.SiteName
+	case "tagline":
+		return s.Tagline
+	case "primary":
+		return s.PrimaryColor
+	case "secondary":
+		return s.SecondaryColor
+	case "email":
+		return s.ContactEmail
+	case "phone":
+		return s.ContactPhone
+	case "address":
+		return s.ContactAddress
+	case "meta_title":
+		return s.DefaultMetaTitle
+	case "meta_desc":
+		return s.DefaultMetaDescription
+	case "facebook":
+		return s.FacebookURL
+	}
+	return ""
+}
+
+templ WebsitePagesAdmin(pages []dto.WebsitePageResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Website Pages", csrf, user, websitePagesContent(pages))
+}
+
+templ websitePagesContent(pages []dto.WebsitePageResponse) {
+	<div class="space-y-4">
+		<div class="flex justify-between"><h1 class="text-2xl font-bold">Pages</h1><a href="/website/pages/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">New Page</a></div>
+		<table class="min-w-full rounded-xl border bg-white text-sm">
+			<thead class="bg-slate-50"><tr><th class="px-4 py-2 text-left">Title</th><th class="px-4 py-2 text-left">Slug</th><th class="px-4 py-2">Published</th><th></th></tr></thead>
+			<tbody class="divide-y">
+				for _, p := range pages {
+					<tr>
+						<td class="px-4 py-2">{ p.Title }</td>
+						<td class="px-4 py-2">{ p.Slug }</td>
+						<td class="px-4 py-2">{ p.IsPublished }</td>
+						<td class="px-4 py-2"><a href={ templ.SafeURL("/website/pages/" + p.ID.String() + "/edit") } class="text-indigo-600">Edit</a></td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+templ WebsitePageForm(title string, page *dto.WebsitePageResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, websitePageFormContent(title, page, csrf))
+}
+
+templ websitePageFormContent(title string, page *dto.WebsitePageResponse, csrf string) {
+	<div class="mx-auto max-w-2xl">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ pageFormAction(page) } class="mt-4 space-y-3 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input type="text" name="slug" value={ pageField(page, "slug") } placeholder="slug" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="title" value={ pageField(page, "title") } placeholder="Title" required class="w-full rounded-lg border px-3 py-2"/>
+			<select name="page_type" class="w-full rounded-lg border px-3 py-2">
+				<option value="custom">Custom</option>
+				<option value="about">About</option>
+				<option value="principal">Principal</option>
+			</select>
+			<textarea name="content" rows="8" class="w-full rounded-lg border px-3 py-2">{ pageField(page, "content") }</textarea>
+			<input type="text" name="meta_title" value={ pageField(page, "meta_title") } placeholder="SEO Title" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="meta_description" placeholder="SEO Description" class="w-full rounded-lg border px-3 py-2">{ pageField(page, "meta_desc") }</textarea>
+			<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_published" checked?={ pagePublished(page) }/> Published</label>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func pageFormAction(page *dto.WebsitePageResponse) string {
+	if page == nil {
+		return "/website/pages"
+	}
+	return "/website/pages/" + page.ID.String()
+}
+
+func pageField(page *dto.WebsitePageResponse, f string) string {
+	if page == nil {
+		return ""
+	}
+	switch f {
+	case "slug":
+		return page.Slug
+	case "title":
+		return page.Title
+	case "content":
+		return page.Content
+	case "meta_title":
+		return page.MetaTitle
+	case "meta_desc":
+		return page.MetaDescription
+	}
+	return ""
+}
+
+func pagePublished(page *dto.WebsitePageResponse) bool {
+	if page == nil {
+		return true
+	}
+	return page.IsPublished
+}
+
+templ WebsiteBannersAdmin(banners []dto.WebsiteBannerResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Banners", csrf, user, websiteBannersContent(banners, csrf))
+}
+
+templ websiteBannersContent(banners []dto.WebsiteBannerResponse, csrf string) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Banners</h1>
+		<form method="POST" action="/website/banners" enctype="multipart/form-data" class="rounded-xl border bg-white p-4 space-y-3">
+			@components.CSRFInput(csrf)
+			<input type="text" name="title" placeholder="Title" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="subtitle" placeholder="Subtitle" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="file" name="image" required class="text-sm"/>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Add Banner</button>
+		</form>
+		<div class="grid gap-4 sm:grid-cols-2">
+			for _, b := range banners {
+				<div class="rounded-xl border overflow-hidden">
+					<img src={ b.ImageURL } class="h-32 w-full object-cover"/>
+					<p class="p-3 font-medium">{ b.Title }</p>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ WebsiteGalleryAdmin(gallery []dto.WebsiteGalleryResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Gallery", csrf, user, websiteGalleryAdminContent(gallery, csrf))
+}
+
+templ websiteGalleryAdminContent(gallery []dto.WebsiteGalleryResponse, csrf string) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Gallery</h1>
+		<form method="POST" action="/website/gallery" enctype="multipart/form-data" class="flex gap-2">
+			@components.CSRFInput(csrf)
+			<input type="text" name="title" placeholder="Title" required class="rounded-lg border px-3 py-2"/>
+			<input type="file" name="image" required class="text-sm"/>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Upload</button>
+		</form>
+		<div class="grid gap-3 sm:grid-cols-3">
+			for _, g := range gallery {
+				<img src={ g.ImageURL } class="h-32 rounded-lg object-cover"/>
+			}
+		</div>
+	</div>
+}
+
+templ WebsiteNewsAdmin(data *dto.PaginatedNews, csrf string, user *dto.AuthUser) {
+	@layouts.Base("News", csrf, user, websiteNewsAdminContent(data, csrf))
+}
+
+templ websiteNewsAdminContent(data *dto.PaginatedNews, csrf string) {
+	<div class="space-y-4">
+		<div class="flex justify-between"><h1 class="text-2xl font-bold">News</h1><a href="/website/news/new" class="text-indigo-600">Add</a></div>
+		if data != nil {
+			for _, n := range data.Items {
+				<div class="rounded-lg border p-3 text-sm">{ n.Title } — { n.IsPublished }</div>
+			}
+		}
+	</div>
+}
+
+templ WebsiteNewsForm(csrf string, user *dto.AuthUser) {
+	@layouts.Base("Create News", csrf, user, websiteNewsFormContent(csrf))
+}
+
+templ websiteNewsFormContent(csrf string) {
+	<form method="POST" action="/website/news" enctype="multipart/form-data" class="mx-auto max-w-2xl space-y-3 rounded-xl border bg-white p-6">
+		@components.CSRFInput(csrf)
+		<input type="text" name="slug" placeholder="slug" required class="w-full rounded-lg border px-3 py-2"/>
+		<input type="text" name="title" placeholder="Title" required class="w-full rounded-lg border px-3 py-2"/>
+		<textarea name="excerpt" placeholder="Excerpt" class="w-full rounded-lg border px-3 py-2"></textarea>
+		<textarea name="body" rows="6" placeholder="Body" required class="w-full rounded-lg border px-3 py-2"></textarea>
+		<input type="file" name="image" class="text-sm"/>
+		<label class="text-sm"><input type="checkbox" name="is_published"/> Publish</label>
+		<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+	</form>
+}
+
+templ WebsiteEventsAdmin(data *dto.PaginatedEvents, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Events", csrf, user, websiteEventsAdminContent(data, csrf))
+}
+
+templ websiteEventsAdminContent(data *dto.PaginatedEvents, csrf string) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Events</h1>
+		<form method="POST" action="/website/events" class="space-y-3 rounded-xl border bg-white p-4">
+			@components.CSRFInput(csrf)
+			<input type="text" name="slug" placeholder="slug" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="title" placeholder="Title" required class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="description" required class="w-full rounded-lg border px-3 py-2"></textarea>
+			<input type="datetime-local" name="event_date" required class="w-full rounded-lg border px-3 py-2"/>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Add Event</button>
+		</form>
+	</div>
+}
+
+templ WebsiteDownloadsAdmin(downloads []dto.DownloadResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Downloads", csrf, user, websiteDownloadsAdminContent(downloads, csrf))
+}
+
+templ websiteDownloadsAdminContent(downloads []dto.DownloadResponse, csrf string) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Downloads</h1>
+		<form method="POST" action="/website/downloads" enctype="multipart/form-data" class="space-y-3 rounded-xl border bg-white p-4">
+			@components.CSRFInput(csrf)
+			<input type="text" name="slug" placeholder="slug" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="title" placeholder="Title" required class="w-full rounded-lg border px-3 py-2"/>
+			<select name="category" class="w-full rounded-lg border px-3 py-2">
+				<option value="prospectus">Prospectus</option>
+				<option value="circular">Admission Circular</option>
+				<option value="form">Form</option>
+				<option value="document">Document</option>
+			</select>
+			<input type="file" name="file" required class="text-sm"/>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Upload</button>
+		</form>
+		<ul class="divide-y rounded-xl border text-sm">
+			for _, d := range downloads {
+				<li class="px-4 py-2">{ d.Title } ({ d.Category })</li>
+			}
+		</ul>
+	</div>
+}
+
+templ WebsiteContactsAdmin(data *dto.PaginatedContactMessages, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Contact Inquiries", csrf, user, websiteContactsContent(data, csrf))
+}
+
+templ websiteContactsContent(data *dto.PaginatedContactMessages, csrf string) {
+	<div class="space-y-4">
+		<h1 class="text-2xl font-bold">Contact Inquiries</h1>
+		if data != nil {
+			for _, m := range data.Items {
+				<div class="rounded-xl border bg-white p-4 text-sm">
+					<div class="flex justify-between">
+						<p class="font-medium">{ m.Subject }</p>
+						<span class="capitalize text-slate-500">{ m.Status }</span>
+					</div>
+					<p>{ m.Name } — { m.Email }</p>
+					<p class="mt-2 text-slate-600">{ m.Message }</p>
+					<form method="POST" action={ templ.SafeURL("/website/contacts/" + m.ID.String() + "/status") } class="mt-2">
+						@components.CSRFInput(csrf)
+						<input type="hidden" name="status" value="read"/>
+						<button type="submit" class="text-xs text-indigo-600">Mark Read</button>
+					</form>
+				</div>
+			}
+		}
+	</div>
+}

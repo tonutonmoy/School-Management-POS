@@ -1,0 +1,32 @@
+package components
+
+import "github.com/school-management/pos/internal/i18n"
+
+templ LanguageSwitcher() {
+	<div class="flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-semibold">
+		<a
+			href="/lang/en"
+			class={ langLinkClass("en") }
+			data-prefetch="off"
+		>{ i18n.TC("ui.lang.en") }</a>
+		<a
+			href="/lang/bn"
+			class={ langLinkClass("bn") }
+			data-prefetch="off"
+		>{ i18n.TC("ui.lang.bn") }</a>
+	</div>
+}
+
+func langLinkClass(code string) string {
+	active := string(i18n.Current()) == code
+	if active {
+		return "rounded-md bg-white px-2.5 py-1 text-indigo-700 shadow-sm"
+	}
+	return "rounded-md px-2.5 py-1 text-slate-500 hover:text-slate-800"
+}
+
+templ PageLoader() {
+	<div id="page-loader" class="pointer-events-none fixed inset-x-0 top-0 z-[100] h-0.5 opacity-0 transition-opacity duration-150" aria-hidden="true">
+		<div class="page-loader-bar h-full w-full origin-left scale-x-0 bg-indigo-600"></div>
+	</div>
+}

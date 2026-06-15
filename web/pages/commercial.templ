@@ -1,0 +1,390 @@
+package pages
+
+import (
+	"fmt"
+	"net/url"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+templ SystemHealth(stats *dto.HealthDashboardStats, csrf string, user *dto.AuthUser) {
+	@layouts.Base("System Health", csrf, user, systemHealthContent(stats))
+}
+
+templ systemHealthContent(stats *dto.HealthDashboardStats) {
+	<div class="space-y-6">
+		<div class="flex flex-wrap items-center justify-between gap-4">
+			<h1 class="text-2xl font-bold">System Health</h1>
+			<div class="flex gap-2 text-sm">
+				<a href="/system/settings" class="rounded-lg border px-3 py-1.5">Settings</a>
+				<a href="/system/backups" class="rounded-lg border px-3 py-1.5">Backups</a>
+				<a href="/system/audit" class="rounded-lg border px-3 py-1.5">Audit Center</a>
+				<a href="/system/security" class="rounded-lg border px-3 py-1.5">Security</a>
+				<a href="/system/license" class="rounded-lg border px-3 py-1.5">License</a>
+			</div>
+		</div>
+		if stats != nil {
+			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+				@components.StatCard("Uptime", fmt.Sprintf("%dh %dm", stats.UptimeSeconds/3600, (stats.UptimeSeconds%3600)/60), "indigo")
+				@components.StatCard("Database", stats.DatabaseStatus, healthColor(stats.DatabaseStatus))
+				@components.StatCard("Queue Pending", fmt.Sprintf("%d", stats.QueuePending), queueColor(stats.QueuePending))
+				@components.StatCard("Disk Usage", fmt.Sprintf("%.1f MB", stats.DiskUsageMB), "slate")
+			</div>
+			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+				@components.StatCard("Storage", stats.StorageStatus, "blue")
+				@components.StatCard("Email", stats.EmailStatus, "emerald")
+				@components.StatCard("SMS", stats.SMSStatus, "amber")
+			</div>
+			<p class="text-sm text-slate-500">DB latency: { stats.DatabaseLatency } · Backups: { fmt.Sprintf("%d", stats.BackupCount) }</p>
+		}
+	</div>
+}
+
+func healthColor(status string) string {
+	if status == "healthy" {
+		return "emerald"
+	}
+	return "red"
+}
+
+func queueColor(n int64) string {
+	if n > 100 {
+		return "red"
+	}
+	return "emerald"
+}
+
+templ SystemSettings(settings *dto.SystemSettingsResponse, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("System Settings", csrf, user, systemSettingsContent(settings, flash, flashType, csrf))
+}
+
+templ systemSettingsContent(settings *dto.SystemSettingsResponse, flash, flashType, csrf string) {
+	<div class="space-y-8">
+		<h1 class="text-2xl font-bold">System Settings</h1>
+		@components.Flash(flash, flashType)
+		if settings != nil {
+			<form method="POST" action="/system/settings/smtp" class="rounded-xl border bg-white p-6 space-y-3">
+				@components.CSRFInput(csrf)
+				<h2 class="font-semibold">SMTP</h2>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<input type="text" name="smtp_host" value={ settings.SMTP.Host } placeholder="SMTP Host" class="rounded-lg border px-3 py-2"/>
+					<input type="number" name="smtp_port" value={ fmt.Sprintf("%d", settings.SMTP.Port) } class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="smtp_username" value={ settings.SMTP.Username } placeholder="Username" class="rounded-lg border px-3 py-2"/>
+					<input type="password" name="smtp_password" placeholder="Password" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="smtp_from" value={ settings.SMTP.From } placeholder="From address" class="rounded-lg border px-3 py-2 sm:col-span-2"/>
+				</div>
+				<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="smtp_enabled" checked?={ settings.SMTP.Enabled }/> Enable SMTP</label>
+				<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save SMTP</button>
+			</form>
+			<form method="POST" action="/system/settings/sms" class="rounded-xl border bg-white p-6 space-y-3">
+				@components.CSRFInput(csrf)
+				<h2 class="font-semibold">SMS Gateway</h2>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<select name="sms_provider" class="rounded-lg border px-3 py-2">
+						<option value="log" selected?={ settings.SMS.Provider == "log" }>Log (Dev)</option>
+						<option value="bulksmsbd" selected?={ settings.SMS.Provider == "bulksmsbd" }>BulkSMSBD</option>
+					</select>
+					<input type="text" name="sms_sender_id" value={ settings.SMS.SenderID } placeholder="Sender ID" class="rounded-lg border px-3 py-2"/>
+					<input type="password" name="sms_api_key" placeholder="API Key" class="rounded-lg border px-3 py-2 sm:col-span-2"/>
+				</div>
+				<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="sms_enabled" checked?={ settings.SMS.Enabled }/> Enable SMS</label>
+				<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save SMS</button>
+			</form>
+			<form method="POST" action="/system/settings/security" class="rounded-xl border bg-white p-6 space-y-3">
+				@components.CSRFInput(csrf)
+				<h2 class="font-semibold">Password Policy</h2>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<input type="number" name="min_length" value={ fmt.Sprintf("%d", settings.Security.MinLength) } class="rounded-lg border px-3 py-2"/>
+					<input type="number" name="max_failed_attempts" value={ fmt.Sprintf("%d", settings.Security.MaxFailedAttempts) } class="rounded-lg border px-3 py-2"/>
+				</div>
+				<div class="flex flex-wrap gap-4 text-sm">
+					<label class="flex items-center gap-2"><input type="checkbox" name="require_uppercase" checked?={ settings.Security.RequireUppercase }/> Uppercase</label>
+					<label class="flex items-center gap-2"><input type="checkbox" name="require_number" checked?={ settings.Security.RequireNumber }/> Number</label>
+					<label class="flex items-center gap-2"><input type="checkbox" name="require_special" checked?={ settings.Security.RequireSpecial }/> Special char</label>
+				</div>
+				<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save Security</button>
+			</form>
+			<form method="POST" action="/system/settings/branding" class="rounded-xl border bg-white p-6 space-y-3">
+				@components.CSRFInput(csrf)
+				<h2 class="font-semibold">White Label Branding</h2>
+				<div class="grid gap-3 sm:grid-cols-2">
+					<input type="text" name="app_name" value={ settings.Branding.AppName } placeholder="App Name" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="primary_color" value={ settings.Branding.PrimaryColor } placeholder="#4f46e5" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="logo_url" value={ settings.Branding.LogoURL } placeholder="Logo URL" class="rounded-lg border px-3 py-2"/>
+					<input type="text" name="favicon_url" value={ settings.Branding.FaviconURL } placeholder="Favicon URL" class="rounded-lg border px-3 py-2"/>
+					<textarea name="email_footer" placeholder="Email footer" rows="2" class="rounded-lg border px-3 py-2 sm:col-span-2">{ settings.Branding.EmailFooter }</textarea>
+				</div>
+				<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save Branding</button>
+			</form>
+			<form method="POST" action="/system/settings/backup-schedule" class="rounded-xl border bg-white p-6 space-y-3">
+				@components.CSRFInput(csrf)
+				<h2 class="font-semibold">Scheduled Backup</h2>
+				<label class="flex items-center gap-2 text-sm"><input type="checkbox" name="enabled" checked?={ settings.BackupSchedule.Enabled }/> Enable daily backup</label>
+				<input type="text" name="cron" value={ settings.BackupSchedule.Cron } placeholder="0 2 * * *" class="w-full rounded-lg border px-3 py-2"/>
+				<input type="number" name="retention_days" value={ fmt.Sprintf("%d", settings.BackupSchedule.RetentionDays) } class="w-full rounded-lg border px-3 py-2"/>
+				<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save Schedule</button>
+			</form>
+			<p class="text-sm text-slate-500">Environment: { settings.AppEnv } · URL: { settings.AppURL }</p>
+		}
+	</div>
+}
+
+templ BackupList(data *dto.PaginatedBackups, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Database Backups", csrf, user, backupListContent(data, flash, flashType, csrf))
+}
+
+templ backupListContent(data *dto.PaginatedBackups, flash, flashType, csrf string) {
+	<div class="space-y-6">
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Database Backups</h1>
+			<form method="POST" action="/system/backups/create">
+				@components.CSRFInput(csrf)
+				<button type="submit" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm text-white">Create Backup</button>
+			</form>
+		</div>
+		@components.Flash(flash, flashType)
+		<div class="overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-2 text-left">File</th><th class="px-4 py-2 text-left">Type</th>
+					<th class="px-4 py-2 text-right">Size</th><th class="px-4 py-2 text-left">Status</th>
+					<th class="px-4 py-2 text-left">Verified</th><th class="px-4 py-2"></th>
+				</tr></thead>
+				<tbody class="divide-y">
+					if data != nil {
+						for _, b := range data.Items {
+							<tr>
+								<td class="px-4 py-2">{ b.FileName }</td>
+								<td class="px-4 py-2 capitalize">{ b.BackupType }</td>
+								<td class="px-4 py-2 text-right">{ fmt.Sprintf("%.2f MB", float64(b.FileSize)/(1024*1024)) }</td>
+								<td class="px-4 py-2 capitalize">{ b.Status }</td>
+								<td class="px-4 py-2">{ backupVerified(b.Verified) }</td>
+								<td class="px-4 py-2 text-right space-x-2">
+									if b.Status == "completed" {
+										<a href={ templ.SafeURL("/system/backups/" + b.ID.String() + "/download") } class="text-indigo-600">Download</a>
+										<form method="POST" action={ templ.SafeURL("/system/backups/" + b.ID.String() + "/verify") } class="inline">
+											@components.CSRFInput(csrf)
+											<button type="submit" class="text-emerald-600">Verify</button>
+										</form>
+										<form method="POST" action={ templ.SafeURL("/system/backups/" + b.ID.String() + "/restore") } class="inline" onsubmit="return confirm('Restore will overwrite the database. Continue?')">
+											@components.CSRFInput(csrf)
+											<button type="submit" class="text-red-600">Restore</button>
+										</form>
+									}
+								</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+		if data != nil {
+			@components.Pagination(data.Page, data.TotalPages, "/system/backups", "")
+		}
+	</div>
+}
+
+func backupVerified(v bool) string {
+	if v {
+		return "✓"
+	}
+	return "—"
+}
+
+templ AuditCenter(data *dto.PaginatedAuditLogs, filter dto.AuditSearchFilter, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Audit Center", csrf, user, auditCenterContent(data, filter))
+}
+
+templ auditCenterContent(data *dto.PaginatedAuditLogs, filter dto.AuditSearchFilter) {
+	<div class="space-y-4">
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Audit Center</h1>
+			<a href="/system/audit/export.csv" class="text-sm text-indigo-600">Export CSV</a>
+		</div>
+		<form method="GET" class="flex flex-wrap gap-2 text-sm">
+			<input type="text" name="q" value={ filter.Query } placeholder="Search..." class="rounded-lg border px-3 py-2"/>
+			<input type="text" name="action" value={ filter.Action } placeholder="Action" class="rounded-lg border px-3 py-2"/>
+			<input type="text" name="module" value={ filter.EntityType } placeholder="Module" class="rounded-lg border px-3 py-2"/>
+			<input type="text" name="user" value={ filter.UserEmail } placeholder="User email" class="rounded-lg border px-3 py-2"/>
+			<button type="submit" class="rounded-lg bg-slate-800 px-4 py-2 text-white">Filter</button>
+		</form>
+		<div class="overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full text-sm">
+				<thead class="bg-slate-50"><tr>
+					<th class="px-4 py-2 text-left">Time</th><th class="px-4 py-2 text-left">User</th>
+					<th class="px-4 py-2 text-left">Action</th><th class="px-4 py-2 text-left">Module</th>
+				</tr></thead>
+				<tbody class="divide-y">
+					if data != nil {
+						for _, l := range data.Items {
+							<tr>
+								<td class="px-4 py-2">{ l.CreatedAt.Format("2006-01-02 15:04") }</td>
+								<td class="px-4 py-2">{ auditCenterUser(l) }</td>
+								<td class="px-4 py-2">{ l.Action }</td>
+								<td class="px-4 py-2">{ l.EntityType }</td>
+							</tr>
+						}
+					}
+				</tbody>
+			</table>
+		</div>
+		if data != nil {
+			@components.Pagination(data.Page, data.TotalPages, "/system/audit", auditCenterQuery(filter))
+		}
+	</div>
+}
+
+func auditCenterQuery(f dto.AuditSearchFilter) string {
+	v := url.Values{}
+	if f.Query != "" {
+		v.Set("q", f.Query)
+	}
+	if f.Action != "" {
+		v.Set("action", f.Action)
+	}
+	if f.EntityType != "" {
+		v.Set("module", f.EntityType)
+	}
+	if f.UserEmail != "" {
+		v.Set("user", f.UserEmail)
+	}
+	return v.Encode()
+}
+
+func auditCenterUser(l dto.ActivityItem) string {
+	if l.UserEmail != "" {
+		return l.UserEmail
+	}
+	return "System"
+}
+
+templ LicensePage(license *dto.LicenseResponse, sampleKey, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("License Management", csrf, user, licensePageContent(license, sampleKey, flash, flashType, csrf))
+}
+
+templ licensePageContent(license *dto.LicenseResponse, sampleKey, flash, flashType, csrf string) {
+	<div class="space-y-6 max-w-lg">
+		<h1 class="text-2xl font-bold">License Management</h1>
+		@components.Flash(flash, flashType)
+		if license != nil {
+			<div class="rounded-xl border bg-white p-6 space-y-2 text-sm">
+				<p><strong>School:</strong> { license.SchoolName }</p>
+				<p><strong>Key:</strong> { license.LicenseKey }</p>
+				<p><strong>Status:</strong> <span class="capitalize">{ license.Status }</span></p>
+				if license.ExpiresAt != nil {
+					<p><strong>Expires:</strong> { license.ExpiresAt.Format("2006-01-02") } ({ fmt.Sprintf("%d days", license.DaysRemaining) } remaining)</p>
+				}
+			</div>
+		} else {
+			<form method="POST" action="/system/license/activate" class="rounded-xl border bg-white p-6 space-y-3">
+				@components.CSRFInput(csrf)
+				<p class="text-sm text-slate-500">Sample key format: { sampleKey }</p>
+				<input type="text" name="license_key" placeholder="License Key" required class="w-full rounded-lg border px-3 py-2"/>
+				<input type="text" name="school_name" placeholder="School Name" required class="w-full rounded-lg border px-3 py-2"/>
+				<input type="text" name="school_code" placeholder="School Code" class="w-full rounded-lg border px-3 py-2"/>
+				<input type="email" name="registered_email" placeholder="Registered Email" required class="w-full rounded-lg border px-3 py-2"/>
+				<input type="date" name="expires_at" class="w-full rounded-lg border px-3 py-2"/>
+				<button type="submit" class="w-full rounded-lg bg-indigo-600 py-2 text-white">Activate License</button>
+			</form>
+		}
+	</div>
+}
+
+templ SecurityDashboard(stats *dto.SecurityDashboardStats, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Security Dashboard", csrf, user, securityDashboardContent(stats))
+}
+
+templ securityDashboardContent(stats *dto.SecurityDashboardStats) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Security Dashboard</h1>
+		if stats != nil {
+			<div class="grid gap-4 sm:grid-cols-3">
+				@components.StatCard("Failed Today", fmt.Sprintf("%d", stats.FailedLoginsToday), "red")
+				@components.StatCard("Failed (7d)", fmt.Sprintf("%d", stats.FailedLoginsWeek), "amber")
+				@components.StatCard("Unique IPs Today", fmt.Sprintf("%d", stats.UniqueIPsToday), "indigo")
+			</div>
+			<div class="rounded-xl border bg-white">
+				<h2 class="border-b px-4 py-3 font-semibold">Recent Failed Logins</h2>
+				<table class="min-w-full text-sm">
+					<thead class="bg-slate-50"><tr><th class="px-4 py-2 text-left">Time</th><th class="px-4 py-2 text-left">Email</th><th class="px-4 py-2 text-left">IP</th></tr></thead>
+					<tbody class="divide-y">
+						for _, f := range stats.RecentFailures {
+							<tr>
+								<td class="px-4 py-2">{ f.CreatedAt.Format("2006-01-02 15:04") }</td>
+								<td class="px-4 py-2">{ f.Email }</td>
+								<td class="px-4 py-2">{ f.IPAddress }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<div class="rounded-xl border bg-white">
+				<h2 class="border-b px-4 py-3 font-semibold">IP Audit (7 days)</h2>
+				<table class="min-w-full text-sm">
+					<thead class="bg-slate-50"><tr><th class="px-4 py-2 text-left">IP</th><th class="px-4 py-2 text-right">Attempts</th><th class="px-4 py-2 text-right">Failed</th></tr></thead>
+					<tbody class="divide-y">
+						for _, a := range stats.IPAudit {
+							<tr>
+								<td class="px-4 py-2">{ a.IPAddress }</td>
+								<td class="px-4 py-2 text-right">{ fmt.Sprintf("%d", a.AttemptCount) }</td>
+								<td class="px-4 py-2 text-right text-red-600">{ fmt.Sprintf("%d", a.FailedCount) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+}
+
+templ EmailTemplatesList(templates []dto.EmailTemplateResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Email Templates", csrf, user, emailTemplatesContent(templates, csrf))
+}
+
+templ emailTemplatesContent(templates []dto.EmailTemplateResponse, csrf string) {
+	<div class="space-y-6">
+		<h1 class="text-2xl font-bold">Email Templates</h1>
+		for _, t := range templates {
+			<form method="POST" action={ templ.SafeURL("/system/templates/" + t.Slug) } class="rounded-xl border bg-white p-6 space-y-3">
+				@components.CSRFInput(csrf)
+				<h2 class="font-semibold">{ t.Name }</h2>
+				<input type="text" name="subject" value={ t.Subject } class="w-full rounded-lg border px-3 py-2"/>
+				<textarea name="body_html" rows="4" class="w-full rounded-lg border px-3 py-2 font-mono text-sm">{ t.BodyHTML }</textarea>
+				<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Save Template</button>
+			</form>
+		}
+	</div>
+}
+
+templ InstallWizard(flash, flashType, csrf string) {
+	@layouts.PublicAuthLayout("Installation Wizard", csrf, installWizardContent(flash, flashType, csrf))
+}
+
+templ installWizardContent(flash, flashType, csrf string) {
+	@layouts.PublicCard("School Management System — Setup", installForm(flash, flashType, csrf))
+}
+
+templ installForm(flash, flashType, csrf string) {
+	@layouts.PublicFlash(flash, flashType)
+	<form method="POST" action="/install" class="space-y-4">
+		@components.CSRFInput(csrf)
+		<fieldset class="space-y-3">
+			<legend class="font-semibold">Administrator Account</legend>
+			<input type="email" name="admin_email" placeholder="Admin Email" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="password" name="admin_password" placeholder="Password (min 8 chars)" required class="w-full rounded-lg border px-3 py-2"/>
+			<div class="grid gap-3 sm:grid-cols-2">
+				<input type="text" name="admin_first_name" placeholder="First Name" required class="rounded-lg border px-3 py-2"/>
+				<input type="text" name="admin_last_name" placeholder="Last Name" required class="rounded-lg border px-3 py-2"/>
+			</div>
+		</fieldset>
+		<fieldset class="space-y-3">
+			<legend class="font-semibold">School Setup</legend>
+			<input type="text" name="school_name" placeholder="School Name" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="email" name="school_email" placeholder="School Email" required class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="school_phone" placeholder="Phone" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="school_address" placeholder="Address" rows="2" class="w-full rounded-lg border px-3 py-2"></textarea>
+		</fieldset>
+		<button type="submit" class="w-full rounded-lg bg-indigo-600 py-2.5 font-semibold text-white">Complete Installation</button>
+	</form>
+}

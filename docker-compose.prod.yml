@@ -1,0 +1,13 @@
+# Production override — app only on localhost; host nginx handles SSL.
+services:
+  app:
+    ports:
+      - "127.0.0.1:8085:8085"
+    restart: unless-stopped
+
+  db:
+    restart: unless-stopped
+
+  nginx:
+    profiles:
+      - disabled

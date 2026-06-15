@@ -1,0 +1,48 @@
+package layouts
+
+import (
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/web/components"
+)
+
+templ ParentLayout(title, csrf string, user *dto.AuthUser, content templ.Component) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title }</title>
+			<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+			<link href="/static/css/app.css" rel="stylesheet"/>
+		</head>
+		<body class="min-h-screen bg-slate-50 text-slate-900">
+			if user != nil {
+				<header class="border-b border-emerald-200 bg-white">
+					<div class="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+						<div class="flex items-center gap-6">
+							<a href="/parent/dashboard" class="text-lg font-semibold text-emerald-700">Parent Portal</a>
+							<nav class="hidden items-center gap-1 md:flex">
+								@components.NavLink("/parent/dashboard", "Dashboard", title == "Parent Dashboard")
+								@components.NavLink("/parent/children", "My Children", title == "My Children")
+								@components.NavLink("/parent/notices", "Notices", title == "Notices" || title == "Notice Detail")
+								@components.NavLink("/parent/notifications", "Notifications", title == "Notifications")
+								@components.NavLink("/parent/profile", "Profile", title == "My Profile")
+							</nav>
+						</div>
+						<div class="flex items-center gap-4">
+							@components.UserBadge(user)
+							<a href="/change-password" class="text-sm text-slate-600 hover:text-emerald-700">Password</a>
+							<form method="POST" action="/logout">
+								@components.CSRFInput(csrf)
+								<button type="submit" class="rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">Logout</button>
+							</form>
+						</div>
+					</div>
+				</header>
+			}
+			<main class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+				@content
+			</main>
+		</body>
+	</html>
+}

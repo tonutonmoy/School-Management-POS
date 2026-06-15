@@ -1,0 +1,2 @@
+-- Fee finance schema (mirrors migrations/009_fees_finance.sql)
+-- See migrations/009_fees_finance.sql for full DDL

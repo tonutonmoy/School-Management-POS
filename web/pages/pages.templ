@@ -1,0 +1,606 @@
+package pages
+
+import (
+	"fmt"
+	"strconv"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/school-management/pos/internal/dto"
+	"github.com/school-management/pos/internal/i18n"
+	"github.com/school-management/pos/web/components"
+	"github.com/school-management/pos/web/layouts"
+)
+
+templ Login(flash, flashType, csrf, defaultEmail, defaultPassword string) {
+	@layouts.AuthLayout("Login", csrf, loginContent(flash, flashType, csrf, defaultEmail, defaultPassword))
+}
+
+templ loginContent(flash, flashType, csrf, defaultEmail, defaultPassword string) {
+	<div>
+		<h1 class="text-2xl font-bold text-slate-900">{ i18n.TC("login.title") }</h1>
+		<p class="mt-1 text-sm text-slate-500">{ i18n.TC("login.subtitle") }</p>
+		@components.Flash(flash, flashType)
+		<form method="POST" action="/login" class="mt-6 space-y-4">
+			@components.CSRFInput(csrf)
+			<div>
+				<label class="mb-1 block text-sm font-medium text-slate-700">{ i18n.TC("login.email") }</label>
+				<input type="email" name="email" required value={ defaultEmail } class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"/>
+			</div>
+			<div>
+				<label class="mb-1 block text-sm font-medium text-slate-700">{ i18n.TC("login.password") }</label>
+				<input type="password" name="password" required value={ defaultPassword } class="w-full rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-200"/>
+			</div>
+			<button type="submit" class="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700">{ i18n.TC("login.submit") }</button>
+		</form>
+		<p class="mt-4 text-center text-sm text-slate-500">
+			<a href="/forgot-password" class="text-indigo-600 hover:underline">{ i18n.TC("login.forgot") }</a>
+		</p>
+	</div>
+}
+
+templ ForgotPassword(flash, flashType, csrf string) {
+	@layouts.AuthLayout("Forgot Password", csrf, forgotContent(flash, flashType, csrf))
+}
+
+templ forgotContent(flash, flashType, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Reset password</h1>
+		@components.Flash(flash, flashType)
+		<form method="POST" action="/forgot-password" class="mt-6 space-y-4">
+			@components.CSRFInput(csrf)
+			<input type="email" name="email" required placeholder="Email" class="w-full rounded-lg border border-slate-300 px-3 py-2"/>
+			<button type="submit" class="w-full rounded-lg bg-indigo-600 px-4 py-2 text-white">Send reset link</button>
+		</form>
+		<a href="/login" class="mt-4 block text-center text-sm text-indigo-600">Back to login</a>
+	</div>
+}
+
+templ ResetPassword(token, flash, flashType, csrf string) {
+	@layouts.AuthLayout("Reset Password", csrf, resetContent(token, flash, flashType, csrf))
+}
+
+templ resetContent(token, flash, flashType, csrf string) {
+	<div>
+		<h1 class="text-2xl font-bold">Set new password</h1>
+		@components.Flash(flash, flashType)
+		<form method="POST" action="/reset-password" class="mt-6 space-y-4">
+			@components.CSRFInput(csrf)
+			<input type="hidden" name="token" value={ token }/>
+			<input type="password" name="password" required placeholder="New password" class="w-full rounded-lg border border-slate-300 px-3 py-2"/>
+			<input type="password" name="confirm_password" required placeholder="Confirm password" class="w-full rounded-lg border border-slate-300 px-3 py-2"/>
+			<button type="submit" class="w-full rounded-lg bg-indigo-600 px-4 py-2 text-white">Update password</button>
+		</form>
+	</div>
+}
+
+templ ChangePassword(flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Change Password", csrf, user, changePasswordContent(flash, flashType, csrf))
+}
+
+templ changePasswordContent(flash, flashType, csrf string) {
+	<div class="max-w-lg">
+		<h1 class="text-2xl font-bold">Change password</h1>
+		@components.Flash(flash, flashType)
+		<form method="POST" action="/change-password" class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input type="password" name="current_password" required placeholder="Current password" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="password" name="new_password" required placeholder="New password" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="password" name="confirm_password" required placeholder="Confirm password" class="w-full rounded-lg border px-3 py-2"/>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+templ Dashboard(stats *dto.DashboardStats, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Dashboard", csrf, user, dashboardContent(stats, flash, flashType))
+}
+
+templ dashboardContent(stats *dto.DashboardStats, flash, flashType string) {
+	<div>
+		<h1 class="text-2xl font-bold">Dashboard</h1>
+		@components.Flash(flash, flashType)
+		<div class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+			@components.StatCard("Total Students", strconv.FormatInt(stats.TotalStudents, 10), "text-indigo-600")
+			@components.StatCard("New Admissions", strconv.FormatInt(stats.NewAdmissionsThisMonth, 10), "text-sky-600")
+			@components.StatCard("Total Teachers", strconv.FormatInt(stats.TotalTeachers, 10), "text-emerald-600")
+			@components.StatCard("Total Staff", strconv.FormatInt(stats.TotalStaff, 10), "text-amber-600")
+			if stats.HasActiveSession {
+				@components.StatCard("Active Session", stats.ActiveSessionName, "text-violet-600")
+			} else {
+				@components.StatCard("Active Session", "None", "text-slate-400")
+			}
+		</div>
+		if len(stats.StudentsByClass) > 0 {
+			<div class="mt-8 rounded-xl border bg-white p-6 shadow-sm">
+				<h2 class="text-lg font-semibold">Students by Class</h2>
+				<div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+					for _, c := range stats.StudentsByClass {
+						@components.StatCard(c.ClassName, strconv.FormatInt(c.StudentCount, 10), "text-indigo-600")
+					}
+				</div>
+			</div>
+		}
+		<div class="mt-8 rounded-xl border bg-white p-6 shadow-sm">
+			<h2 class="text-lg font-semibold">Recent Activities</h2>
+			<div class="mt-4 divide-y">
+				for _, item := range stats.RecentActivities {
+					<div class="flex items-center justify-between py-3 text-sm">
+						<div>
+							<p class="font-medium text-slate-800">{ item.Description }</p>
+							<p class="text-slate-500">{ item.Action } · { item.EntityType }</p>
+						</div>
+						<span class="text-slate-400">{ item.CreatedAt.Format("Jan 02, 15:04") }</span>
+					</div>
+				}
+				if len(stats.RecentActivities) == 0 {
+					<p class="py-4 text-sm text-slate-500">No recent activity.</p>
+				}
+			</div>
+		</div>
+	</div>
+}
+
+templ UserList(data *dto.PaginatedUsers, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Users", csrf, user, userListContent(data, csrf))
+}
+
+templ userListContent(data *dto.PaginatedUsers, csrf string) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Users</h1>
+			<a href="/users/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white">Create User</a>
+		</div>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white shadow-sm">
+			<table class="min-w-full divide-y divide-slate-200 text-sm">
+				<thead class="bg-slate-50">
+					<tr>
+						<th class="px-4 py-3 text-left font-medium text-slate-600">Name</th>
+						<th class="px-4 py-3 text-left font-medium text-slate-600">Email</th>
+						<th class="px-4 py-3 text-left font-medium text-slate-600">Role</th>
+						<th class="px-4 py-3 text-left font-medium text-slate-600">Status</th>
+						<th class="px-4 py-3 text-right font-medium text-slate-600">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y">
+					for _, u := range data.Items {
+						<tr>
+							<td class="px-4 py-3">{ u.FirstName } { u.LastName }</td>
+							<td class="px-4 py-3">{ u.Email }</td>
+							<td class="px-4 py-3">{ u.RoleName }</td>
+							<td class="px-4 py-3">
+								if u.IsActive {
+									<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-700">Active</span>
+								} else {
+									<span class="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">Inactive</span>
+								}
+							</td>
+							<td class="px-4 py-3 text-right">
+								<a href={ templ.SafeURL("/users/" + u.ID.String()) } class="text-indigo-600 hover:underline">View</a>
+								<a href={ templ.SafeURL("/users/" + u.ID.String() + "/edit") } class="ml-3 text-indigo-600 hover:underline">Edit</a>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		if data != nil {
+			@components.Pagination(data.Page, data.TotalPages, "/users", "")
+		}
+	</div>
+}
+
+templ UserDetail(u dto.UserResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("User Details", csrf, user, userDetailContent(u, csrf))
+}
+
+templ userDetailContent(u dto.UserResponse, csrf string) {
+	<div class="max-w-2xl rounded-xl border bg-white p-6">
+		<h1 class="text-2xl font-bold">{ u.FirstName } { u.LastName }</h1>
+		<dl class="mt-4 space-y-2 text-sm">
+			<div><dt class="inline font-medium">Email:</dt> <dd class="inline">{ u.Email }</dd></div>
+			<div><dt class="inline font-medium">Role:</dt> <dd class="inline">{ u.RoleName }</dd></div>
+			<div><dt class="inline font-medium">Phone:</dt> <dd class="inline">{ u.Phone }</dd></div>
+		</dl>
+		<div class="mt-6 flex gap-3">
+			<a href={ templ.SafeURL("/users/" + u.ID.String() + "/edit") } class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Edit</a>
+			<form method="POST" action={ templ.SafeURL("/users/" + u.ID.String() + "/toggle") }>
+				@components.CSRFInput(csrf)
+				<input type="hidden" name="active" value={ fmt.Sprintf("%t", !u.IsActive) }/>
+				<button type="submit" class="rounded-lg border px-4 py-2">{ toggleLabel(u.IsActive) }</button>
+			</form>
+		</div>
+	</div>
+}
+
+func toggleLabel(active bool) string {
+	if active {
+		return "Deactivate"
+	}
+	return "Activate"
+}
+
+templ UserForm(title string, u *dto.UserResponse, roles []dto.RoleResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, userFormContent(title, u, roles, csrf))
+}
+
+templ userFormContent(title string, u *dto.UserResponse, roles []dto.RoleResponse, csrf string) {
+	<div class="max-w-2xl">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ userFormAction(u) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input type="email" name="email" required value={ userFieldEmail(u) } placeholder="Email" class="w-full rounded-lg border px-3 py-2"/>
+			if u == nil {
+				<input type="password" name="password" required placeholder="Password" class="w-full rounded-lg border px-3 py-2"/>
+			}
+			<div class="grid gap-4 sm:grid-cols-2">
+				<input type="text" name="first_name" required value={ userFieldFirst(u) } placeholder="First name" class="rounded-lg border px-3 py-2"/>
+				<input type="text" name="last_name" required value={ userFieldLast(u) } placeholder="Last name" class="rounded-lg border px-3 py-2"/>
+			</div>
+			<input type="text" name="phone" value={ userFieldPhone(u) } placeholder="Phone" class="w-full rounded-lg border px-3 py-2"/>
+			<select name="role_id" required class="w-full rounded-lg border px-3 py-2">
+				for _, r := range roles {
+					<option value={ r.ID.String() } selected?={ userRoleSelected(u, r.ID) }>{ r.Name }</option>
+				}
+			</select>
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="is_active" checked?={ userIsActive(u) }/>
+				Active
+			</label>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func userFormAction(u *dto.UserResponse) string {
+	if u == nil {
+		return "/users"
+	}
+	return "/users/" + u.ID.String()
+}
+
+func userFieldEmail(u *dto.UserResponse) string {
+	if u == nil {
+		return ""
+	}
+	return u.Email
+}
+
+func userFieldFirst(u *dto.UserResponse) string {
+	if u == nil {
+		return ""
+	}
+	return u.FirstName
+}
+
+func userFieldLast(u *dto.UserResponse) string {
+	if u == nil {
+		return ""
+	}
+	return u.LastName
+}
+
+func userFieldPhone(u *dto.UserResponse) string {
+	if u == nil {
+		return ""
+	}
+	return u.Phone
+}
+
+func userRoleSelected(u *dto.UserResponse, roleID uuid.UUID) bool {
+	if u == nil {
+		return false
+	}
+	return u.RoleID == roleID
+}
+
+func userIsActive(u *dto.UserResponse) bool {
+	if u == nil {
+		return true
+	}
+	return u.IsActive
+}
+
+templ RoleList(roles []dto.RoleResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Roles", csrf, user, roleListContent(roles))
+}
+
+templ roleListContent(roles []dto.RoleResponse) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Roles</h1>
+			<a href="/roles/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">Create Role</a>
+		</div>
+		<div class="mt-6 grid gap-4 md:grid-cols-2">
+			for _, r := range roles {
+				<div class="rounded-xl border bg-white p-5 shadow-sm">
+					<div class="flex items-start justify-between">
+						<div>
+							<h2 class="font-semibold">{ r.Name }</h2>
+							<p class="text-sm text-slate-500">{ r.Slug }</p>
+						</div>
+						if r.IsSystem {
+							<span class="rounded-full bg-slate-100 px-2 py-1 text-xs">System</span>
+						}
+					</div>
+					<p class="mt-2 text-sm text-slate-600">{ r.Description }</p>
+					<p class="mt-3 text-xs text-slate-500">{ len(r.Permissions) } permissions</p>
+					<a href={ templ.SafeURL("/roles/" + r.ID.String() + "/edit") } class="mt-4 inline-block text-sm text-indigo-600">Edit permissions</a>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+templ RoleForm(title string, role *dto.RoleResponse, permissions []dto.PermissionResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, roleFormContent(title, role, permissions, csrf))
+}
+
+templ roleFormContent(title string, role *dto.RoleResponse, permissions []dto.PermissionResponse, csrf string) {
+	<div class="max-w-3xl">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ roleFormAction(role) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input type="text" name="name" required value={ roleFieldName(role) } placeholder="Role name" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="slug" required value={ roleFieldSlug(role) } placeholder="slug-name" class="w-full rounded-lg border px-3 py-2"/>
+			<textarea name="description" placeholder="Description" class="w-full rounded-lg border px-3 py-2">{ roleFieldDesc(role) }</textarea>
+			<div>
+				<p class="mb-2 text-sm font-medium">Permissions</p>
+				<div class="grid gap-2 sm:grid-cols-2">
+					for _, p := range permissions {
+						<label class="flex items-center gap-2 rounded border px-3 py-2 text-sm">
+							<input type="checkbox" name="permission_ids" value={ p.ID.String() } checked?={ hasPermission(role, p.Slug) }/>
+							<span>{ p.Slug }</span>
+						</label>
+					}
+				</div>
+			</div>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func roleFormAction(role *dto.RoleResponse) string {
+	if role == nil {
+		return "/roles"
+	}
+	return "/roles/" + role.ID.String()
+}
+
+func roleFieldName(role *dto.RoleResponse) string {
+	if role == nil {
+		return ""
+	}
+	return role.Name
+}
+
+func roleFieldSlug(role *dto.RoleResponse) string {
+	if role == nil {
+		return ""
+	}
+	return role.Slug
+}
+
+func roleFieldDesc(role *dto.RoleResponse) string {
+	if role == nil {
+		return ""
+	}
+	return role.Description
+}
+
+func hasPermission(role *dto.RoleResponse, slug string) bool {
+	if role == nil {
+		return false
+	}
+	for _, p := range role.Permissions {
+		if p == slug {
+			return true
+		}
+	}
+	return false
+}
+
+templ SchoolSetup(school *dto.SchoolResponse, flash, flashType, csrf string, user *dto.AuthUser) {
+	@layouts.Base("School Setup", csrf, user, schoolContent(school, flash, flashType, csrf))
+}
+
+templ schoolContent(school *dto.SchoolResponse, flash, flashType, csrf string) {
+	<div class="max-w-2xl">
+		<h1 class="text-2xl font-bold">School Setup</h1>
+		@components.Flash(flash, flashType)
+		<form method="POST" action="/school" enctype="multipart/form-data" class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input type="text" name="name" required value={ schoolName(school) } placeholder="School name" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="file" name="logo" accept="image/*" class="w-full text-sm"/>
+			if school != nil && school.LogoURL != "" {
+				<img src={ school.LogoURL } alt="Logo" class="h-16 w-16 rounded object-cover"/>
+			}
+			<textarea name="address" placeholder="Address" class="w-full rounded-lg border px-3 py-2">{ schoolAddress(school) }</textarea>
+			<input type="email" name="email" value={ schoolEmail(school) } placeholder="Email" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="text" name="phone" value={ schoolPhone(school) } placeholder="Phone" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="url" name="website" value={ schoolWebsite(school) } placeholder="Website" class="w-full rounded-lg border px-3 py-2"/>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func schoolName(s *dto.SchoolResponse) string {
+	if s == nil {
+		return ""
+	}
+	return s.Name
+}
+
+func schoolAddress(s *dto.SchoolResponse) string {
+	if s == nil {
+		return ""
+	}
+	return s.Address
+}
+
+func schoolEmail(s *dto.SchoolResponse) string {
+	if s == nil {
+		return ""
+	}
+	return s.Email
+}
+
+func schoolPhone(s *dto.SchoolResponse) string {
+	if s == nil {
+		return ""
+	}
+	return s.Phone
+}
+
+func schoolWebsite(s *dto.SchoolResponse) string {
+	if s == nil {
+		return ""
+	}
+	return s.Website
+}
+
+templ SessionList(sessions []dto.AcademicSessionResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Academic Sessions", csrf, user, sessionListContent(sessions, csrf))
+}
+
+templ sessionListContent(sessions []dto.AcademicSessionResponse, csrf string) {
+	<div>
+		<div class="flex items-center justify-between">
+			<h1 class="text-2xl font-bold">Academic Sessions</h1>
+			<a href="/sessions/new" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm text-white">New Session</a>
+		</div>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50">
+					<tr>
+						<th class="px-4 py-3 text-left">Name</th>
+						<th class="px-4 py-3 text-left">Start</th>
+						<th class="px-4 py-3 text-left">End</th>
+						<th class="px-4 py-3 text-left">Status</th>
+						<th class="px-4 py-3 text-right">Actions</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y">
+					for _, s := range sessions {
+						<tr>
+							<td class="px-4 py-3">{ s.Name }</td>
+							<td class="px-4 py-3">{ s.StartDate.Format("2006-01-02") }</td>
+							<td class="px-4 py-3">{ s.EndDate.Format("2006-01-02") }</td>
+							<td class="px-4 py-3">
+								if s.IsActive {
+									<span class="rounded-full bg-emerald-100 px-2 py-1 text-xs text-emerald-700">Active</span>
+								} else {
+									<span class="text-slate-500">Inactive</span>
+								}
+							</td>
+							<td class="px-4 py-3 text-right">
+								<a href={ templ.SafeURL("/sessions/" + s.ID.String() + "/edit") } class="text-indigo-600">Edit</a>
+								if !s.IsActive {
+									<form method="POST" action={ templ.SafeURL("/sessions/" + s.ID.String() + "/activate") } class="ml-3 inline">
+										@components.CSRFInput(csrf)
+										<button type="submit" class="text-emerald-600">Activate</button>
+									</form>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+templ SessionForm(title string, s *dto.AcademicSessionResponse, csrf string, user *dto.AuthUser) {
+	@layouts.Base(title, csrf, user, sessionFormContent(title, s, csrf))
+}
+
+templ sessionFormContent(title string, s *dto.AcademicSessionResponse, csrf string) {
+	<div class="max-w-xl">
+		<h1 class="text-2xl font-bold">{ title }</h1>
+		<form method="POST" action={ sessionFormAction(s) } class="mt-6 space-y-4 rounded-xl border bg-white p-6">
+			@components.CSRFInput(csrf)
+			<input type="text" name="name" required value={ sessionName(s) } placeholder="Session name" class="w-full rounded-lg border px-3 py-2"/>
+			<input type="date" name="start_date" required value={ sessionStart(s) } class="w-full rounded-lg border px-3 py-2"/>
+			<input type="date" name="end_date" required value={ sessionEnd(s) } class="w-full rounded-lg border px-3 py-2"/>
+			<label class="flex items-center gap-2 text-sm">
+				<input type="checkbox" name="is_active" checked?={ sessionActive(s) }/>
+				Set as active session
+			</label>
+			<button type="submit" class="rounded-lg bg-indigo-600 px-4 py-2 text-white">Save</button>
+		</form>
+	</div>
+}
+
+func sessionFormAction(s *dto.AcademicSessionResponse) string {
+	if s == nil {
+		return "/sessions"
+	}
+	return "/sessions/" + s.ID.String()
+}
+
+func sessionName(s *dto.AcademicSessionResponse) string {
+	if s == nil {
+		return ""
+	}
+	return s.Name
+}
+
+func sessionStart(s *dto.AcademicSessionResponse) string {
+	if s == nil {
+		return ""
+	}
+	return s.StartDate.Format("2006-01-02")
+}
+
+func sessionEnd(s *dto.AcademicSessionResponse) string {
+	if s == nil {
+		return ""
+	}
+	return s.EndDate.Format("2006-01-02")
+}
+
+func sessionActive(s *dto.AcademicSessionResponse) bool {
+	if s == nil {
+		return false
+	}
+	return s.IsActive
+}
+
+templ AuditList(logs []dto.ActivityItem, csrf string, user *dto.AuthUser) {
+	@layouts.Base("Audit Logs", csrf, user, auditListContent(logs))
+}
+
+templ auditListContent(logs []dto.ActivityItem) {
+	<div>
+		<h1 class="text-2xl font-bold">Audit Logs</h1>
+		<div class="mt-6 overflow-hidden rounded-xl border bg-white">
+			<table class="min-w-full divide-y text-sm">
+				<thead class="bg-slate-50">
+					<tr>
+						<th class="px-4 py-3 text-left">Time</th>
+						<th class="px-4 py-3 text-left">User</th>
+						<th class="px-4 py-3 text-left">Action</th>
+						<th class="px-4 py-3 text-left">Entity</th>
+					</tr>
+				</thead>
+				<tbody class="divide-y">
+					for _, l := range logs {
+						<tr>
+							<td class="px-4 py-3">{ l.CreatedAt.Format(time.RFC822) }</td>
+							<td class="px-4 py-3">{ auditUser(l) }</td>
+							<td class="px-4 py-3">{ l.Action }</td>
+							<td class="px-4 py-3">{ l.EntityType }</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+}
+
+func auditUser(l dto.ActivityItem) string {
+	if l.UserEmail != "" {
+		return l.UserEmail
+	}
+	return "System"
+}

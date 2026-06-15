@@ -1,0 +1,7 @@
+{
+  "name": "school-management-pos",
+  "private": true,
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

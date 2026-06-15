@@ -1,0 +1,2 @@
+-- Online admission & website CMS schema reference
+-- See migrations/017_online_admission_website.sql
